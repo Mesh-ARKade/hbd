@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MAME DAT files — ROMs, CHDs, Software Lists, and BIOS sets for MAME 0.287, processed by HBD.">
+    <title>MAME DATs // Mesh ARKade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+    <nav class="site-nav">
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <img src="../ARKade.svg" alt="ARKade">
+            </div>
+            <span class="nav-title">Mesh <span>ARKade</span></span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="../index.html">DATs</a></li>
+            <li><a href="index.html" class="active">MAME</a></li>
+        </ul>
+        <div class="nav-status">
+            <div class="status-dot"></div>
+            <span class="status-label">Live Seed</span>
+        </div>
+    </nav>
+
+    <main class="page-main">
+
+        <!-- BREADCRUMB -->
+        <nav class="breadcrumb">
+            <a href="../index.html">Home</a>
+            <span class="sep">/</span>
+            <span class="current">MAME</span>
+        </nav>
+
+        <header class="page-header">
+            <div class="header-meta">
+                <span class="tag tag-teal">MAME</span>
+                <span class="tag tag-navy">Arcade Source</span>
+                <span style="font-size:10px;font-family:monospace;color:rgba(252,253,250,0.4);text-transform:uppercase;letter-spacing:0.2em;">Version 0.287</span>
+            </div>
+            <div class="header-lockup">
+                <div class="header-icon">
+                    <img src="../ARKade.svg" alt="ARKade Icon">
+                </div>
+                <div class="header-headings">
+                    <h1 style="font-family:'Outfit',sans-serif;font-weight:900;font-size:clamp(40px,7vw,80px);line-height:0.9;margin-bottom:8px;">MAME</h1>
+                    <div class="pixel-sub">Arcade Precision</div>
+                </div>
+            </div>
+            <p class="header-desc">
+                Multiple Arcade Machine Emulator DAT files. Includes full ROM sets (merged, split, non-merged), CHDs, Software Lists, and BIOS/device sets. All processed by HBD from official MAME sources.
+            </p>
+        </header>
+
+        <!-- SEARCH BAR -->
+        <div style="margin-bottom: 24px; position: relative; max-width: 400px;">
+            <input type="text" id="datSearch" placeholder="SEARCH DAT FILES..." style="width: 100%; background: rgba(14,55,84,0.3); border: 1px solid rgba(51,175,169,0.3); color: var(--icon-white); padding: 12px 16px 12px 40px; border-radius: 6px; font-family: 'Space Grotesk', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; outline: none; transition: border-color 0.3s;" onfocus="this.style.borderColor='var(--icon-teal)'" onblur="this.style.borderColor='rgba(51,175,169,0.3)'">
+            <svg style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(51,175,169,0.7);" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+
+        <div class="info-box">
+            <strong>Merged vs Non-Merged vs Split:</strong> Merged packs parent + clones into one ZIP (smallest). Split keeps clones separate from parents. Non-merged makes every game fully self-contained (largest, most portable). CHD files are separate disc images required by some games.
+        </div>
+
+        <!-- TABLE -->
+        <section style="display:flex;flex-direction:column;gap:40px;">
+
+            <!-- ROMs -->
+            <div>
+                <div class="dat-table-wrap">
+                    <div class="section-label">MAME ROMs — Full Sets</div>
+                    <table class="dat-table">
+                        <thead>
+                            <tr>
+                                <th>DAT Name</th>
+                                <th>Version</th>
+                                <th>Entries</th>
+                                <th>Format</th>
+                                <th>Updated</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><div class="dat-name">MAME ROMs (merged)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">40,862</td>
+                                <td><span class="tag tag-outline">Merged</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                            <tr>
+                                <td><div class="dat-name">MAME ROMs (non-merged)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">40,862</td>
+                                <td><span class="tag tag-outline">Non-Merged</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                            <tr>
+                                <td><div class="dat-name">MAME ROMs (split)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">40,862</td>
+                                <td><span class="tag tag-outline">Split</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BIOS / Devices -->
+            <div>
+                <div class="dat-table-wrap">
+                    <div class="section-label">BIOS &amp; Devices</div>
+                    <table class="dat-table">
+                        <thead>
+                            <tr>
+                                <th>DAT Name</th>
+                                <th>Version</th>
+                                <th>Entries</th>
+                                <th>Format</th>
+                                <th>Updated</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><div class="dat-name">MAME ROMs (bios-devices)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">788</td>
+                                <td><span class="tag tag-outline">Standalone</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Software List -->
+            <div>
+                <div class="dat-table-wrap">
+                    <div class="section-label">Software List ROMs</div>
+                    <table class="dat-table">
+                        <thead>
+                            <tr>
+                                <th>DAT Name</th>
+                                <th>Version</th>
+                                <th>Entries</th>
+                                <th>Format</th>
+                                <th>Updated</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><div class="dat-name">MAME Software List ROMs (merged)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">127,441</td>
+                                <td><span class="tag tag-outline">Merged</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                            <tr>
+                                <td><div class="dat-name">MAME Software List ROMs (split)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">127,441</td>
+                                <td><span class="tag tag-outline">Split</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CHDs -->
+            <div>
+                <div class="dat-table-wrap">
+                    <div class="section-label">CHDs (Disc Images)</div>
+                    <table class="dat-table">
+                        <thead>
+                            <tr>
+                                <th>DAT Name</th>
+                                <th>Version</th>
+                                <th>Entries</th>
+                                <th>Format</th>
+                                <th>Updated</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><div class="dat-name">MAME CHDs (merged)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">3,184</td>
+                                <td><span class="tag tag-outline">Merged</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                            <tr>
+                                <td><div class="dat-name">MAME Software List CHDs (merged)</div></td>
+                                <td><span class="dat-version">0.287</span></td>
+                                <td class="dat-size">9,222</td>
+                                <td><span class="tag tag-outline">Merged</span></td>
+                                <td class="dat-size">2025-04-15</td>
+                                <td><a href="#" class="btn-download">↓ DAT</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer class="site-footer">
+        Mesh ARKade &mdash; HBD Genesis Seed &mdash; Data processed &amp; seeded via Hyperswarm P2P
+    </footer>
+
+    <script>
+        document.getElementById('datSearch').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.dat-table tbody tr').forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>

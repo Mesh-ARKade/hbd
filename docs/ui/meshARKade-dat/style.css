@@ -1,0 +1,464 @@
+/* =========================================
+   Mesh ARKade DAT Site — Design System
+   Palette sourced 1:1 from ARKade.svg
+   ========================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Epilogue:wght@900&family=Press+Start+2P&family=Space+Grotesk:wght@300;400;700;900&family=Outfit:wght@300;400;700;900&display=swap');
+
+:root {
+    --icon-red:   #f01532;
+    --icon-navy:  #0e3754;
+    --icon-teal:  #33afa9;
+    --icon-cyan:  #c9f1f2;
+    --icon-white: #fcfdfa;
+    --bg-dark:    #050505;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--icon-white);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow-x: hidden;
+    background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.03) 1px, transparent 0);
+    background-size: 40px 40px;
+    min-height: 100vh;
+}
+
+::selection { background: var(--icon-teal); color: #000; }
+
+a { color: inherit; text-decoration: none; }
+
+/* ---- NAV ---- */
+.site-nav {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 1152px;
+    height: 64px;
+    background: rgba(5,5,5,0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 9999px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-logo {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.nav-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.nav-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--icon-white);
+}
+
+.nav-title span { color: #ff0013; }
+
+.nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+}
+
+.nav-links a {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(252,253,250,0.4);
+    transition: color 0.2s;
+}
+
+.nav-links a:hover { color: var(--icon-cyan); }
+.nav-links a.active {
+    color: var(--icon-white);
+    border-bottom: 2px solid var(--icon-teal);
+    padding-bottom: 4px;
+}
+
+.nav-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--icon-teal);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.status-label {
+    font-size: 10px;
+    font-family: 'Space Grotesk', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.4);
+}
+
+/* ---- LAYOUT ---- */
+.page-main {
+    max-width: 1152px;
+    margin: 0 auto;
+    padding: 160px 24px 128px;
+}
+
+/* ---- PAGE HEADER ---- */
+.page-header { margin-bottom: 80px; }
+
+.header-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.header-lockup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.header-icon {
+    width: clamp(120px, 15vw, 180px);
+    flex-shrink: 0;
+}
+
+.header-icon img {
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 0 10px rgba(51, 175, 169, 0.2));
+}
+
+.header-headings h1 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    font-size: clamp(48px, 8vw, 96px);
+    line-height: 0.9;
+    tracking: -0.05em;
+    margin-bottom: 8px;
+}
+
+.header-headings .pixel-sub {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(14px, 2vw, 22px);
+    color: #ff0013;
+    line-height: 1.4;
+}
+
+.header-desc {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 300;
+    font-size: 18px;
+    color: rgba(252,253,250,0.5);
+    max-width: 640px;
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+}
+
+/* ---- TAGS / BADGES ---- */
+.tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+    line-height: 1;
+}
+
+.tag-teal { background: var(--icon-teal); color: var(--bg-dark); }
+.tag-navy { background: var(--icon-navy); color: var(--icon-cyan); border: 1px solid rgba(201,241,242,0.2); }
+.tag-outline { background: transparent; border: 1px solid rgba(252,253,250,0.15); color: rgba(252,253,250,0.5); }
+.tag-red { background: rgba(240,21,50,0.15); color: var(--icon-red); border: 1px solid rgba(240,21,50,0.3); }
+
+/* ---- BREADCRUMB ---- */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 48px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(252,253,250,0.3);
+}
+
+.breadcrumb a { transition: color 0.2s; }
+.breadcrumb a:hover { color: var(--icon-cyan); }
+.breadcrumb .sep { color: rgba(255,255,255,0.15); }
+.breadcrumb .current { color: var(--icon-teal); }
+
+/* ---- GLASS CARD ---- */
+.glass-card {
+    background: rgba(252,253,250,0.02);
+    border: 1px solid rgba(252,253,250,0.06);
+    border-radius: 16px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.glass-card:hover {
+    border-color: var(--icon-teal);
+    background: rgba(51,175,169,0.03);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -20px rgba(14,55,84,0.5);
+}
+
+/* ---- SOURCE GRID (index page) ---- */
+.source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.source-card {
+    display: flex;
+    flex-direction: column;
+    padding: 40px;
+    min-height: 280px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.source-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: auto;
+}
+
+.source-name {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+}
+
+.source-meta {
+    font-size: 11px;
+    font-family: 'Space Grotesk', monospace;
+    color: rgba(252,253,250,0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.source-stats {
+    display: flex;
+    gap: 24px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.stat-item { display: flex; flex-direction: column; gap: 4px; }
+.stat-value {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    color: var(--icon-cyan);
+}
+
+.stat-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(252,253,250,0.3);
+}
+
+.source-cta {
+    margin-top: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--icon-teal);
+    transition: gap 0.2s;
+}
+
+.glass-card:hover .source-cta { gap: 14px; }
+
+/* ---- DAT TABLE (source pages) ---- */
+.dat-table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(252,253,250,0.06);
+}
+
+.dat-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+}
+
+.dat-table th:first-child {
+    width: 45%;
+}
+
+.dat-table thead tr {
+    background: rgba(14,55,84,0.4);
+    border-bottom: 1px solid rgba(201,241,242,0.1);
+}
+
+.dat-table th {
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: rgba(252,253,250,0.65);
+    white-space: nowrap;
+}
+
+.dat-table tbody tr {
+    position: relative;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    outline: 1px solid transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dat-table tbody tr:last-child { border-bottom: none; }
+
+.dat-table tbody tr:hover {
+    background: rgba(51,175,169,0.04);
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px -12px rgba(14,55,84,0.6);
+    outline: 1px solid var(--icon-teal);
+    z-index: 10;
+}
+
+.dat-table td {
+    padding: 16px 20px;
+    vertical-align: middle;
+    color: rgba(252,253,250,0.85);
+}
+
+.dat-name {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--icon-white);
+}
+
+.dat-version {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 11px;
+    color: var(--icon-teal);
+    font-weight: 700;
+}
+
+.dat-size {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 12px;
+    color: rgba(252,253,250,0.4);
+    white-space: nowrap;
+}
+
+.btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: rgba(51,175,169,0.1);
+    border: 1px solid rgba(51,175,169,0.3);
+    color: var(--icon-teal);
+    border-radius: 4px;
+    transition: all 0.2s;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-download:hover {
+    background: rgba(51,175,169,0.2);
+    border-color: var(--icon-teal);
+    color: var(--icon-white);
+}
+
+/* ---- SECTION DIVIDER ---- */
+.section-label {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: rgba(252,253,250,0.6);
+    padding: 12px 20px;
+    background: rgba(14,55,84,0.2);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ---- INFO BOX ---- */
+.info-box {
+    background: rgba(14,55,84,0.3);
+    border: 1px solid rgba(201,241,242,0.1);
+    border-left: 3px solid var(--icon-teal);
+    border-radius: 6px;
+    padding: 16px 20px;
+    font-size: 14px;
+    color: rgba(252,253,250,0.82);
+    line-height: 1.7;
+    margin-bottom: 32px;
+}
+
+/* ---- FOOTER ---- */
+.site-footer {
+    text-align: center;
+    padding: 32px 24px 48px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: rgba(252,253,250,0.15);
+    border-top: 1px solid rgba(255,255,255,0.04);
+}

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Redump DAT files for optical disc ROM preservation, processed by HBD.">
+    <title>Redump DATs // Mesh ARKade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+    <nav class="site-nav">
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <img src="../ARKade.svg" alt="ARKade">
+            </div>
+            <span class="nav-title">Mesh <span>ARKade</span></span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="../index.html">DATs</a></li>
+            <li><a href="index.html" class="active">Redump</a></li>
+        </ul>
+        <div class="nav-status">
+            <div class="status-dot"></div>
+            <span class="status-label">Live Seed</span>
+        </div>
+    </nav>
+
+    <main class="page-main">
+
+        <nav class="breadcrumb">
+            <a href="../index.html">Home</a>
+            <span class="sep">/</span>
+            <span class="current">Redump</span>
+        </nav>
+
+        <header class="page-header">
+            <div class="header-meta">
+                <span class="tag tag-teal">Redump</span>
+                <span class="tag tag-navy">Optical Media</span>
+            </div>
+            <div class="header-lockup">
+                <div class="header-icon">
+                    <img src="../ARKade.svg" alt="ARKade Icon">
+                </div>
+                <div class="header-headings">
+                    <h1 style="font-family:'Outfit',sans-serif;font-weight:900;font-size:clamp(40px,7vw,80px);line-height:0.9;margin-bottom:8px;">Redump</h1>
+                    <div class="pixel-sub">Optical Perfection</div>
+                </div>
+            </div>
+            <p class="header-desc">
+                Optical disc preservation — CD, DVD, GD-ROM, Blu-ray. Every entry is a verified disc image dump with accurate sector-by-sector hashing. Covers PlayStation, PS2, Dreamcast, Saturn, GameCube, Wii, and more.
+            </p>
+        </header>
+
+        <!-- SEARCH BAR -->
+        <div style="margin-bottom: 24px; position: relative; max-width: 400px;">
+            <input type="text" id="datSearch" placeholder="SEARCH DAT FILES..." style="width: 100%; background: rgba(14,55,84,0.3); border: 1px solid rgba(51,175,169,0.3); color: var(--icon-white); padding: 12px 16px 12px 40px; border-radius: 6px; font-family: 'Space Grotesk', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; outline: none; transition: border-color 0.3s;" onfocus="this.style.borderColor='var(--icon-teal)'" onblur="this.style.borderColor='rgba(51,175,169,0.3)'">
+            <svg style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(51,175,169,0.7);" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+
+        <div class="dat-table-wrap">
+
+            <!-- SONY -->
+            <div class="section-label">Sony</div>
+            <table class="dat-table">
+                <thead>
+                    <tr>
+                        <th>DAT Name</th>
+                        <th>Version</th>
+                        <th>Entries</th>
+                        <th>Updated</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><div class="dat-name">Sony - PlayStation</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">11,094</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Sony - PlayStation 2</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">11,812</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Sony - PlayStation 3</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">5,140</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Sony - PlayStation Portable</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">4,907</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- SEGA -->
+            <div class="section-label">Sega</div>
+            <table class="dat-table">
+                <thead>
+                    <tr>
+                        <th>DAT Name</th>
+                        <th>Version</th>
+                        <th>Entries</th>
+                        <th>Updated</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><div class="dat-name">Sega - Dreamcast</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">1,578</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Sega - Saturn</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">2,462</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Sega - Mega-CD - Sega CD</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">778</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- NINTENDO -->
+            <div class="section-label">Nintendo</div>
+            <table class="dat-table">
+                <thead>
+                    <tr>
+                        <th>DAT Name</th>
+                        <th>Version</th>
+                        <th>Entries</th>
+                        <th>Updated</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><div class="dat-name">Nintendo - GameCube</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">2,192</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Nintendo - Wii</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">4,414</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Nintendo - Wii U</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">1,842</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- MICROSOFT -->
+            <div class="section-label">Microsoft</div>
+            <table class="dat-table">
+                <thead>
+                    <tr>
+                        <th>DAT Name</th>
+                        <th>Version</th>
+                        <th>Entries</th>
+                        <th>Updated</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><div class="dat-name">Microsoft - Xbox</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">1,098</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                    <tr>
+                        <td><div class="dat-name">Microsoft - Xbox 360</div></td>
+                        <td><span class="dat-version">2025-04-08</span></td>
+                        <td class="dat-size">2,847</td>
+                        <td class="dat-size">2025-04-15</td>
+                        <td><a href="#" class="btn-download">↓ DAT</a></td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+    </main>
+
+    <footer class="site-footer">
+        Mesh ARKade &mdash; HBD Genesis Seed &mdash; Data processed &amp; seeded via Hyperswarm P2P
+    </footer>
+
+    <script>
+        document.getElementById('datSearch').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.dat-table tbody tr').forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>
