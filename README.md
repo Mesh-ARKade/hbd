@@ -38,7 +38,3 @@ npm run test:coverage
 # Initialize HBD identity
 node dist/cli.js init
 ```
-
-## 📜 License
-
-MIT © [Mesh ARKade](https://github.com/Mesh-ARKade)

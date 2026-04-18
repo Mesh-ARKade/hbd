@@ -36,7 +36,8 @@
     "rom",
     "metadata"
   ],
-  "license": "MIT",
+  "license": "UNLICENSED",
+  "private": true,
   "dependencies": {
     "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^4.1.4",
