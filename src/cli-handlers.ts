@@ -7,6 +7,8 @@
 import { MetadataStore } from "./storage/hyperbee";
 import { ok, err, Result } from "./core/result";
 import { Logger } from "pino";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 /**
  * Add a ROM to the catalog.
@@ -233,6 +235,102 @@ export async function handleInit(
     const errMsg = error instanceof Error ? error.message : String(error);
     if (logger) {
       logger.error({ error: errMsg }, "Init command failed");
+    }
+    return err(new Error(errMsg));
+  }
+}
+
+// Import dashboard components dynamically to avoid circular dependencies
+const { DashboardServer } = await import("./dashboard/server.js");
+const { PipelineStatus } = await import("./dashboard/pipeline-status.js");
+const { LogBridge } = await import("./dashboard/log-bridge.js");
+
+/**
+ * Dashboard options.
+ */
+export interface DashboardOptions {
+  dataDir: string;
+  port?: number;
+  host?: string;
+}
+
+/**
+ * Start the HBD dashboard server.
+ */
+export async function handleDashboard(
+  options: DashboardOptions,
+  logger?: Logger
+): Promise<Result<{ url: string; port: number; close: () => Promise<void>; pipeline: any; logBridge: any }, Error>> {
+  try {
+    if (logger) {
+      logger.info({ port: options.port, dataDir: options.dataDir }, "Dashboard command started");
+    }
+
+    const dataDir = path.resolve(options.dataDir);
+    
+    // Check if data directory exists
+    if (!fs.existsSync(dataDir)) {
+      const error = new Error(`Data directory does not exist: ${dataDir}`);
+      if (logger) {
+        logger.error({ dataDir, error: error.message }, "Dashboard failed: directory not found");
+      }
+      return err(error);
+    }
+
+    // Create PipelineStatus for state management
+    const pipeline = new PipelineStatus({
+      broadcast: (state) => {
+        // Broadcast will be wired after server starts
+      },
+    });
+
+    // Create LogBridge for log streaming
+    const logBridge = new LogBridge({
+      broadcast: (logEntry) => {
+        // Broadcast will be wired after server starts
+      },
+    });
+
+    // Create and start dashboard server
+    const server = new DashboardServer({
+      dataDir,
+      port: options.port ?? 3000,
+      host: options.host ?? "localhost",
+      logger: logger?.child({ system: "dashboard" }),
+    });
+
+    const url = await server.start();
+    const port = server.getActualPort() ?? options.port ?? 3000;
+
+    // Wire up broadcasting after server is started
+    pipeline["broadcast"] = (state: unknown) => {
+      server.broadcastState(state);
+    };
+
+    logBridge["broadcast"] = (logEntry: unknown) => {
+      server.broadcastLog(logEntry);
+    };
+
+    if (logger) {
+      logger.info({ url, port }, "Dashboard available");
+    }
+
+    return ok({
+      url,
+      port,
+      close: async () => {
+        await server.close();
+        if (logger) {
+          logger.info("Dashboard server closed");
+        }
+      },
+      pipeline,
+      logBridge,
+    });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ error: errMsg }, "Dashboard command failed");
     }
     return err(new Error(errMsg));
   }

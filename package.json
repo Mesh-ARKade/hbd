@@ -39,19 +39,25 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
-    "@types/node": "^25.6.0",
+    "@fastify/static": "^9.1.1",
     "@vitest/coverage-v8": "^4.1.4",
     "bip39": "^3.1.0",
     "commander": "^14.0.3",
     "eslint": "^10.2.1",
+    "fastify": "^5.8.5",
     "hyperbee": "^2.27.3",
     "hypercore": "^11.28.1",
     "hyperswarm": "^4.17.0",
     "pino": "^10.3.1",
     "prettier": "^3.8.3",
     "random-access-memory": "^6.2.1",
+    "socket.io": "^4.8.3",
     "sodium-native": "^5.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "socket.io-client": "^4.8.3"
   }
 }

@@ -239,4 +239,59 @@ program
     logger.info({ peers: peer.getPeerCount() }, "Sync completed");
   });
 
+program
+  .command("dashboard")
+  .description("Launch the HBD web dashboard")
+  .option("-d, --dir <directory>", "Data directory", ".hbd-data")
+  .option("-p, --port <port>", "Port to run dashboard on", "3000")
+  .option("--host <host>", "Host to bind to", "localhost")
+  .action(async (options) => {
+    logger.info({ dir: options.dir, port: options.port }, "Dashboard command invoked");
+
+    const dataDir = path.resolve(options.dir);
+
+    if (!fs.existsSync(dataDir)) {
+      logger.error({ dataDir }, "Directory not initialized");
+      console.error(`HBD not initialized. Run: hbd init -d ${options.dir}`);
+      process.exit(1);
+    }
+
+    const { handleDashboard } = await import("./cli-handlers.js");
+    const result = await handleDashboard(
+      {
+        dataDir,
+        port: parseInt(options.port, 10),
+        host: options.host,
+      },
+      logger
+    );
+
+    if (isOk(result)) {
+      console.log("\n╔════════════════════════════════════════════════════════╗");
+      console.log("║          🕹️  Mesh ARKade Dashboard Live                ║");
+      console.log("╠════════════════════════════════════════════════════════╣");
+      console.log(`║  URL:    ${result.value.url.padEnd(46)}║`);
+      console.log(`║  Port:   ${result.value.port.toString().padEnd(46)}║`);
+      console.log("║                                                        ║");
+      console.log("║  Press Ctrl+C to stop the dashboard                    ║");
+      console.log("╚════════════════════════════════════════════════════════╝\n");
+
+      logger.info({ url: result.value.url, port: result.value.port }, "Dashboard started");
+
+      // Keep process alive
+      process.on("SIGINT", async () => {
+        console.log("\nShutting down dashboard...");
+        await result.value.close();
+        process.exit(0);
+      });
+
+      // Keep running indefinitely
+      await new Promise(() => {});
+    } else {
+      logger.error({ error: result.error.message }, "Dashboard failed to start");
+      console.error(`Failed to start dashboard: ${result.error.message}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();
