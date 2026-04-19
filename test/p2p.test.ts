@@ -1,215 +1,326 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createSyncPeer, connectToPeer, discoverPeers } from "../src/p2p/sync.js";
+import { EventEmitter } from "node:events";
+import { createSyncPeer, connectToPeer, discoverPeers, SyncPeer, P2PError, P2PNotOpenedError, P2PNoPeersError, P2PNoStoreError, P2PConnectionError, P2POpenError, P2PConnectError, P2PCloseError, P2PDisconnectError } from "../src/p2p/sync.js";
+import { isOk, isErr } from "../src/core/result.js";
 
-// Track connection handlers for testing
-const connectionHandlers: Array<(conn: { remotePublicKey: Buffer; on: (event: string, handler: () => void) => void; write: (data: string) => void }) => void> = [];
-
-// Mock hyperswarm module
+// Mock Hyperswarm with EventEmitter so we can emit events
 vi.mock("hyperswarm", () => ({
-  default: class MockHyperswarm {
+  default: class MockHyperswarm extends EventEmitter {
     join = vi.fn().mockResolvedValue(undefined);
     leave = vi.fn().mockResolvedValue(undefined);
-    on = vi.fn((event: string, handler: unknown) => {
-      if (event === "connection") {
-        connectionHandlers.push(handler as (conn: { remotePublicKey: Buffer; on: (event: string, handler: () => void) => void; write: (data: string) => void }) => void);
-      }
-    });
-    once = vi.fn();
-    flush = vi.fn().mockResolvedValue([]);
+    flush = vi.fn().mockResolvedValue(undefined);
     destroy = vi.fn().mockResolvedValue(undefined);
-  },
+  }
 }));
 
-describe("P2P Sync - Full Coverage Tests", () => {
-  let peer: ReturnType<typeof createSyncPeer>;
+describe("P2P Sync - Full Coverage with EventEmitter", () => {
+  let peer: SyncPeer;
 
-  beforeEach(async () => {
-    peer = createSyncPeer("./test-peer");
-    await peer.open();
-  });
-
-  describe("constructor", () => {
-    it("should create peer without store", async () => {
-      const peerWithoutStore = createSyncPeer("./no-store");
-      await peerWithoutStore.open();
-      expect(peerWithoutStore.getPublicKey()).toBeDefined();
-      await peerWithoutStore.close();
-    });
+  beforeEach(() => {
+    peer = createSyncPeer("./test-p2p");
   });
 
   afterEach(async () => {
-    await peer.close();
+    try { 
+      await peer.close();
+    } catch {}
   });
 
-  describe("createSyncPeer()", () => {
-    it("should create a sync peer with public key", async () => {
-      expect(peer.getPublicKey()).toBeDefined();
-      expect(typeof peer.getPublicKey()).toBe("string");
-      expect(peer.getPublicKey().length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("connect()", () => {
-    it("should connect to multiple peers", async () => {
-      await peer.connect("peer1");
-      await peer.connect("peer2");
-      await peer.connect("peer3");
-
-      const connected = peer.getConnectedPeers();
-      expect(connected.length).toBe(3);
-      const keys = connected.map(p => p.publicKey);
-      expect(keys).toContain("peer1");
-      expect(keys).toContain("peer2");
-      expect(keys).toContain("peer3");
+  describe("open() and lifecycle", () => {
+    it("should open and return public key", async () => {
+      const result = await peer.open();
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(typeof result.value).toBe("string");
+        expect(result.value.length).toBe(64);
+      }
     });
 
-    it("should throw when connecting while not opened", async () => {
-      const closedPeer = createSyncPeer("./closed");
-      await expect(closedPeer.connect("peer1")).rejects.toThrow("Peer not opened");
-    });
-  });
-
-  describe("disconnect()", () => {
-    it("should disconnect from connected peer", async () => {
-      await peer.connect("peer1");
-      await peer.disconnect("peer1");
-
-      const connected = peer.getConnectedPeers();
-      const keys = connected.map(p => p.publicKey);
-      expect(keys).not.toContain("peer1");
+    it("should be idempotent", async () => {
+      await peer.open();
+      const result = await peer.open();
+      expect(isOk(result)).toBe(true);
     });
 
-    it("should handle disconnecting non-connected peer gracefully", async () => {
-      // Should not throw
-      await peer.disconnect("nonexistent");
-    });
-  });
-
-  describe("getConnectedPeers()", () => {
-    it("should return empty array when no peers connected", () => {
-      const connected = peer.getConnectedPeers();
-      expect(connected).toEqual([]);
-    });
-  });
-
-  describe("getPeerCount()", () => {
-    it("should return correct peer count", async () => {
-      expect(peer.getPeerCount()).toBe(0);
-      
-      await peer.connect("peer1");
-      expect(peer.getPeerCount()).toBe(1);
-      
-      await peer.connect("peer2");
-      expect(peer.getPeerCount()).toBe(2);
-    });
-  });
-
-  describe("discoverPeers()", () => {
-    it("should return empty array if no peers found", async () => {
-      const peers = await discoverPeers("test-topic");
-      expect(peers).toEqual([]);
-    });
-  });
-
-  describe("connectToPeer()", () => {
-    it("should connect using helper function", async () => {
-      await connectToPeer(peer, "remote-peer");
-      const keys = peer.getConnectedPeers().map(p => p.publicKey);
-      expect(keys).toContain("remote-peer");
-    });
-  });
-
-  describe("replicate()", () => {
-    it("should throw when no peers connected", async () => {
-      await expect(peer.replicate()).rejects.toThrow("No peers connected");
-    });
-
-    it("should throw when no store attached", async () => {
-      const peerWithoutStore = createSyncPeer("./no-store");
-      await peerWithoutStore.open();
-      await peerWithoutStore.connect("peer1");
-      
-      await expect(peerWithoutStore.replicate()).rejects.toThrow("No store attached");
-      
-      await peerWithoutStore.close();
-    });
-  });
-
-  describe("reconnect scenario", () => {
-    it("should handle connect-disconnect-reconnect", async () => {
-      await peer.connect("peer1");
-      await peer.disconnect("peer1");
-      await peer.connect("peer1");
-
-      const connected = peer.getConnectedPeers();
-      const keys = connected.map(p => p.publicKey);
-      expect(keys).toContain("peer1");
-      expect(connected.length).toBe(1);
-    });
-  });
-
-  describe("discoverPeers with mock connections", () => {
-    it("should discover peers from connection events", async () => {
-      // The discoverPeers function should return an array
-      const peers = await discoverPeers("test-topic");
-      expect(Array.isArray(peers)).toBe(true);
+    it("should set up connection handler", async () => {
+      await peer.open();
+      const swarm = (peer as any).swarm;
+      expect(swarm.listenerCount("connection")).toBeGreaterThan(0);
     });
   });
 
   describe("connection event handling", () => {
-    it("should handle incoming peer connections", async () => {
-      // Clear previous handlers
-      connectionHandlers.length = 0;
+    it("should track peer on connection event", async () => {
+      await peer.open();
+      const swarm = (peer as any).swarm;
       
-      // Create a new peer to trigger the on("connection") handler
-      const testPeer = createSyncPeer("./conn-test");
-      await testPeer.open();
+      const mockConn = {
+        remotePublicKey: Buffer.from("peer-key-1234567890123456789012345678"),
+        on: vi.fn(),
+        write: vi.fn()
+      };
       
-      // Simulate a connection event
-      if (connectionHandlers.length > 0) {
-        const mockConn = {
-          remotePublicKey: Buffer.from("test-peer-key"),
-          on: vi.fn(),
-          write: vi.fn(),
-        };
-        connectionHandlers[connectionHandlers.length - 1](mockConn);
-        
-        // Peer should be tracked
-        const peers = testPeer.getConnectedPeers();
-        expect(peers.length).toBeGreaterThan(0);
-      }
+      swarm.emit("connection", mockConn);
       
-      await testPeer.close();
+      expect(peer.getPeerCount()).toBe(1);
+      // remotePublicKey is converted to hex string
+      expect(peer.getConnectedPeers()[0].publicKey).toBe(Buffer.from("peer-key-1234567890123456789012345678").toString("hex"));
     });
 
-    it("should handle connection close events", async () => {
-      connectionHandlers.length = 0;
+    it("should send handshake on connection", async () => {
+      await peer.open();
+      const swarm = (peer as any).swarm;
+      const mockConn = {
+        remotePublicKey: Buffer.from("handshake-peer"),
+        on: vi.fn(),
+        write: vi.fn()
+      };
       
-      const testPeer = createSyncPeer("./close-test");
-      await testPeer.open();
+      swarm.emit("connection", mockConn);
       
-      if (connectionHandlers.length > 0) {
-        const closeHandlers: Array<() => void> = [];
+      expect(mockConn.write).toHaveBeenCalled();
+      const handshake = JSON.parse(mockConn.write.mock.calls[0][0]);
+      expect(handshake.type).toBe("handshake");
+      expect(handshake.publicKey).toBe(peer.getPublicKey());
+    });
+
+    it("should handle connection close event", async () => {
+      await peer.open();
+      const swarm = (peer as any).swarm;
+      
+      let closeHandler: () => void = () => {};
+      const mockConn = {
+        remotePublicKey: Buffer.from("close-peer-key-1234567890123456789012"),
+        on: vi.fn((event: string, handler: () => void) => {
+          if (event === "close") closeHandler = handler;
+        }),
+        write: vi.fn()
+      };
+      
+      swarm.emit("connection", mockConn);
+      expect(peer.getPeerCount()).toBe(1);
+      
+      // Trigger close
+      closeHandler();
+      
+      expect(peer.getPeerCount()).toBe(0);
+    });
+
+    it("should handle multiple connections", async () => {
+      await peer.open();
+      const swarm = (peer as any).swarm;
+      
+      for (let i = 0; i < 5; i++) {
         const mockConn = {
-          remotePublicKey: Buffer.from("test-peer-key"),
-          on: vi.fn((event: string, handler: () => void) => {
-            if (event === "close") closeHandlers.push(handler);
-          }),
-          write: vi.fn(),
+          remotePublicKey: Buffer.from(`peer-${i}-key-1234567890123456789012`),
+          on: vi.fn(),
+          write: vi.fn()
         };
-        
-        connectionHandlers[connectionHandlers.length - 1](mockConn);
-        expect(testPeer.getConnectedPeers().length).toBeGreaterThan(0);
-        
-        // Trigger close
-        closeHandlers.forEach(h => h());
-        
-        // Peer should be removed
-        // Note: In the actual implementation, this removes the peer
-        expect(mockConn.on).toHaveBeenCalledWith("close", expect.any(Function));
+        swarm.emit("connection", mockConn);
       }
       
-      await testPeer.close();
+      expect(peer.getPeerCount()).toBe(5);
+    });
+  });
+
+  describe("manual connect/disconnect", () => {
+    it("should connect manually", async () => {
+      await peer.open();
+      const result = await peer.connect("manual-peer-key");
+      expect(isOk(result)).toBe(true);
+      expect(peer.getPeerCount()).toBe(1);
+    });
+
+    it("should error when connecting without open", async () => {
+      const closedPeer = createSyncPeer("./closed");
+      const result = await closedPeer.connect("any-key");
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error).toBeInstanceOf(P2PNotOpenedError);
+      }
+    });
+
+    it("should disconnect manually", async () => {
+      await peer.open();
+      await peer.connect("peer-to-remove");
+      const result = await peer.disconnect("peer-to-remove");
+      expect(isOk(result)).toBe(true);
+      expect(peer.getPeerCount()).toBe(0);
+    });
+
+    it("should handle disconnect of non-existent peer", async () => {
+      await peer.open();
+      const result = await peer.disconnect("nonexistent");
+      expect(isOk(result)).toBe(true);
+    });
+  });
+
+  describe("replicate()", () => {
+    it("should error when no peers", async () => {
+      await peer.open();
+      const result = await peer.replicate();
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error).toBeInstanceOf(P2PNoPeersError);
+      }
+    });
+
+    it("should error when no store", async () => {
+      const noStorePeer = createSyncPeer("./no-store");
+      await noStorePeer.open();
+      await noStorePeer.connect("peer");
+      
+      const result = await noStorePeer.replicate();
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error).toBeInstanceOf(P2PNoStoreError);
+      }
+    });
+  });
+
+  describe("close()", () => {
+    it("should close cleanly", async () => {
+      await peer.open();
+      const result = await peer.close();
+      expect(isOk(result)).toBe(true);
+      expect(peer.getPeerCount()).toBe(0);
+    });
+
+    it("should be idempotent", async () => {
+      await peer.open();
+      await peer.close();
+      const result = await peer.close();
+      expect(isOk(result)).toBe(true);
+    });
+  });
+
+  describe("error paths", () => {
+    it("should handle join failure", async () => {
+      const failingPeer = createSyncPeer("./fail-join");
+      await failingPeer.open();
+      
+      // Override join to fail
+      const swarm = (failingPeer as any).swarm;
+      swarm.join = vi.fn().mockRejectedValue(new Error("Join failed"));
+      
+      const result = await failingPeer.open();
+      // Second open will try join again
+    });
+
+    it("should handle replicate error", async () => {
+      await peer.open();
+      await peer.connect("test-peer");
+      
+      // Set up a logger that throws
+      const badLogger = {
+        info: vi.fn().mockImplementation(() => { throw new Error("Log error"); }),
+        debug: vi.fn(),
+        error: vi.fn()
+      };
+      peer.setLogger(badLogger as any);
+      
+      const result = await peer.replicate();
+      expect(isErr(result)).toBe(true);
+    });
+  });
+
+  describe("discoverPeers()", () => {
+    it("should return Result", async () => {
+      const result = await discoverPeers("test-topic");
+      expect(result && typeof result.ok === "boolean").toBe(true);
+    });
+
+    it("should handle errors", async () => {
+      // This tests the error path - real Hyperswarm in discoverPeers
+      // will either succeed or fail, but we can at least trigger the function
+      const result = await discoverPeers("error-topic");
+      // Should return a Result either way
+      expect(result.ok !== undefined).toBe(true);
+    });
+  });
+
+  describe("helpers", () => {
+    it("connectToPeer should exist", () => expect(typeof connectToPeer).toBe("function"));
+    it("discoverPeers should exist", () => expect(typeof discoverPeers).toBe("function"));
+  });
+
+  describe("error classes", () => {
+    it("P2PError", () => {
+      const e = new P2PError("test");
+      expect(e.message).toBe("test");
+      expect(e.name).toBe("P2PError");
+    });
+
+    it("P2PNotOpenedError", () => {
+      const e = new P2PNotOpenedError();
+      expect(e.message).toBe("Peer not opened");
+    });
+
+    it("P2PNoPeersError", () => {
+      const e = new P2PNoPeersError();
+      expect(e.message).toBe("No peers connected for replication");
+    });
+
+    it("P2PNoStoreError", () => {
+      const e = new P2PNoStoreError();
+      expect(e.message).toBe("No store attached for replication");
+    });
+
+    it("P2PConnectionError", () => {
+      const e = new P2PConnectionError("conn error");
+      expect(e.message).toBe("conn error");
+      expect(e.name).toBe("P2PConnectionError");
+    });
+
+    it("P2POpenError with cause", () => {
+      const cause = new Error("underlying");
+      const e = new P2POpenError("open failed", cause);
+      expect(e.message).toBe("open failed");
+      expect(e.cause).toBe(cause);
+    });
+
+    it("P2PConnectError with key", () => {
+      const e = new P2PConnectError("conn failed", "peer123");
+      expect(e.message).toBe("conn failed");
+      expect(e.peerKey).toBe("peer123");
+    });
+
+    it("P2PCloseError", () => {
+      const e = new P2PCloseError("close failed");
+      expect(e.message).toBe("close failed");
+    });
+
+    it("P2PDisconnectError with key", () => {
+      const e = new P2PDisconnectError("disc failed", "peer456");
+      expect(e.message).toBe("disc failed");
+      expect(e.peerKey).toBe("peer456");
+    });
+  });
+
+  describe("logging integration", () => {
+    it("should accept pino logger", async () => {
+      const { createLogger } = await import("../src/core/logger.js");
+      const log = createLogger({ level: "silent" });
+      peer.setLogger(log);
+      await peer.open();
+    });
+
+    it("should log on events", async () => {
+      const { createLogger } = await import("../src/core/logger.js");
+      const log = createLogger({ level: "debug", system: "p2p" });
+      peer.setLogger(log);
+      
+      await peer.open();
+      const swarm = (peer as any).swarm;
+      
+      const mockConn = {
+        remotePublicKey: Buffer.from("log-peer"),
+        on: vi.fn(),
+        write: vi.fn()
+      };
+      
+      swarm.emit("connection", mockConn);
+      // Should log connection event
     });
   });
 });

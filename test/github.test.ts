@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { startDeviceFlow, pollForToken, fetchGitHubUser, loadGitHubConfig } from "../src/identity/github.js";
+import { isOk } from "../src/core/result.js";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-describe("GitHub Device Flow service", () => {
+describe("GitHub Device Flow service (Result-based)", () => {
   beforeEach(() => {
     mockFetch.mockReset();
     process.env.HBD_GITHUB_CLIENT_ID = "test-client-id";
@@ -16,9 +17,10 @@ describe("GitHub Device Flow service", () => {
   });
 
   describe("startDeviceFlow()", () => {
-    it("should throw when no client ID configured", async () => {
+    it("should return error when no client ID configured", async () => {
       delete process.env.HBD_GITHUB_CLIENT_ID;
-      await expect(startDeviceFlow()).rejects.toThrow("not configured");
+      const result = await startDeviceFlow();
+      expect(result.ok).toBe(false);
     });
 
     it("should return device flow response", async () => {
@@ -35,8 +37,9 @@ describe("GitHub Device Flow service", () => {
       });
 
       const result = await startDeviceFlow();
-      expect(result.device_code).toBe("device123");
-      expect(result.user_code).toBe("USER-ABCD");
+      expect(isOk(result)).toBe(true);
+      expect(result.value.device_code).toBe("device123");
+      expect(result.value.user_code).toBe("USER-ABCD");
     });
   });
 
@@ -51,16 +54,18 @@ describe("GitHub Device Flow service", () => {
       });
 
       const result = await pollForToken("device123");
-      expect(result.access_token).toBe("token123");
+      expect(isOk(result)).toBe(true);
+      expect(result.value.access_token).toBe("token123");
     });
 
-    it("should throw on authorization pending", async () => {
+    it("should return error on authorization pending", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ error: "authorization_not_complete" }),
       });
 
-      await expect(pollForToken("device123")).rejects.toThrow("authorization_not_complete");
+      const result = await pollForToken("device123");
+      expect(result.ok).toBe(false);
     });
   });
 
@@ -75,16 +80,18 @@ describe("GitHub Device Flow service", () => {
         }),
       });
 
-      const user = await fetchGitHubUser("token123");
-      expect(user.login).toBe("testuser");
-      expect(user.id).toBe(123);
+      const result = await fetchGitHubUser("token123");
+      expect(isOk(result)).toBe(true);
+      expect(result.value.login).toBe("testuser");
+      expect(result.value.id).toBe(123);
     });
   });
 
   describe("loadGitHubConfig()", () => {
     it("should read client ID from env", () => {
-      const config = loadGitHubConfig();
-      expect(config.clientId).toBe("test-client-id");
+      const result = loadGitHubConfig();
+      expect(isOk(result)).toBe(true);
+      expect(result.value.clientId).toBe("test-client-id");
     });
   });
 });

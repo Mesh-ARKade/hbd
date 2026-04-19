@@ -8,6 +8,11 @@ dist/
 coverage/
 .hbd-cli-*
 .hbd-test-*
+.hbd-edge-*
+.hbd-err-*
+.hbd-merge-*
+.hbd-result-*
+.hbd-indexing-*
 
 # Local Data (IMPORTANT: Never commit the database)
 .hbd-data/

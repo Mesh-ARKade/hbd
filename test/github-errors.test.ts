@@ -1,51 +1,70 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { startDeviceFlow, pollForToken, fetchGitHubUser } from "../src/identity/github.js";
+import { startDeviceFlow, pollForToken, fetchGitHubUser, loadGitHubConfig } from "../src/identity/github.js";
+import { isOk, isErr } from "../src/core/result.js";
+import { GitHubAuthError, GitHubConfigError } from "../src/identity/errors.js";
 
+// Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-describe("GitHub error handling", () => {
+describe("GitHub Device Flow - Error Cases (Result-based)", () => {
   beforeEach(() => {
     mockFetch.mockReset();
     process.env.HBD_GITHUB_CLIENT_ID = "test-client-id";
   });
 
-  describe("startDeviceFlow() error cases", () => {
-    it("should throw when server returns error", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: "Server Error",
-      });
-
-      await expect(startDeviceFlow()).rejects.toThrow("Device flow failed");
-    });
+  afterEach(() => {
+    mockFetch.mockReset();
   });
 
-  describe("pollForToken() error cases", () => {
-    it("should throw when client ID not configured", async () => {
+  describe("startDeviceFlow() errors", () => {
+    it("should return error when no client ID", async () => {
       delete process.env.HBD_GITHUB_CLIENT_ID;
-      await expect(pollForToken("device123")).rejects.toThrow("GitHub Client ID not configured");
+      const result = await startDeviceFlow();
+      expect(isErr(result)).toBe(true);
+      expect(result.error).toBeInstanceOf(GitHubConfigError);
     });
 
-    it("should throw when server returns error (non-OK response)", async () => {
+    it("should return error on HTTP failure", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        statusText: "Server Error",
-        json: async () => ({ error: "server_error" }),
+        statusText: "Internal Server Error"
       });
 
-      await expect(pollForToken("device123")).rejects.toThrow("Token request failed");
+      const result = await startDeviceFlow();
+      expect(isErr(result)).toBe(true);
     });
   });
 
-  describe("fetchGitHubUser() error cases", () => {
-    it("should throw when API returns error", async () => {
+  describe("pollForToken() errors", () => {
+    it("should return error on network failure", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await pollForToken("device123");
+      expect(isErr(result)).toBe(true);
+    });
+
+    it("should return error on authorization pending", async () => {
       mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: "Unauthorized",
+        ok: true,
+        json: async () => ({ error: "authorization_pending" })
       });
 
-      await expect(fetchGitHubUser("bad-token")).rejects.toThrow("Failed to fetch");
+      const result = await pollForToken("device123");
+      expect(isErr(result)).toBe(true);
+    });
+  });
+
+  describe("fetchGitHubUser() errors", () => {
+    it("should return error on HTTP failure", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        statusText: "Unauthorized"
+      });
+
+      const result = await fetchGitHubUser("bad-token");
+      expect(isErr(result)).toBe(true);
+      expect(result.error).toBeInstanceOf(GitHubAuthError);
     });
   });
 });

@@ -1,17 +1,52 @@
 /**
  * Hyperbee storage layer for ROM metadata using the Hyperstack.
+ * Refactored to use Result pattern and Pino logging.
  * @packageDocumentation
  */
 
 import Hyperbee from "hyperbee";
 import Hypercore from "hypercore";
 import * as fs from "node:fs";
+import { ok, err, Result } from "../core/result";
+import { StorageError, StorageNotOpenedError, StorageOperationError } from "./errors.js";
+import { Logger, pino } from "pino";
 
 /**
  * Index entry interface for secondary indexes.
  */
 interface IndexEntry {
   hashes: string[];
+}
+
+/**
+ * Custom error class for storage operations
+ */
+export class StorageOpenError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = "StorageOpenError";
+  }
+}
+
+export class StoragePutError extends Error {
+  constructor(message: string, public readonly key: string) {
+    super(message);
+    this.name = "StoragePutError";
+  }
+}
+
+export class StorageGetError extends Error {
+  constructor(message: string, public readonly key: string) {
+    super(message);
+    this.name = "StorageGetError";
+  }
+}
+
+export class StorageDelError extends Error {
+  constructor(message: string, public readonly key: string) {
+    super(message);
+    this.name = "StorageDelError";
+  }
 }
 
 /**
@@ -23,9 +58,31 @@ export class MetadataStore {
   private opened: boolean = false;
   private _publicKey: string = "";
   private _dataDir: string;
+  private logger: Logger | null = null;
 
   constructor(dataDir?: string) {
     this._dataDir = dataDir ?? ".hbd-data";
+  }
+
+  /**
+   * Set a logger instance for observability
+   */
+  setLogger(logger: Logger): void {
+    this.logger = logger;
+  }
+
+  /**
+   * Internal logging helper
+   */
+  private log(level: string, message: string, meta: Record<string, unknown> = {}): void {
+    if (this.logger) {
+      this.logger[level as keyof Logger]({
+        system: "storage",
+        sha1: this._publicKey,
+        dataDir: this._dataDir,
+        ...meta
+      }, message);
+    }
   }
 
   /**
@@ -51,9 +108,6 @@ export class MetadataStore {
 
   /**
    * Normalize a ROM name for consistent indexing.
-   * - Lowercase
-   * - Remove special characters
-   * - Trim whitespace
    */
   normalizeName(name: string): string {
     return name
@@ -65,71 +119,109 @@ export class MetadataStore {
   /**
    * Open the store with file-based persistence.
    */
-  async open(): Promise<void> {
-    if (this.opened) return;
+  async open(): Promise<Result<string, StorageOpenError>> {
+    try {
+      if (this.opened) {
+        return ok(this._publicKey);
+      }
 
-    // Ensure directory exists
-    if (!fs.existsSync(this._dataDir)) {
-      fs.mkdirSync(this._dataDir, { recursive: true });
+      this.log("info", "Opening storage", { dataDir: this._dataDir });
+
+      // Ensure directory exists
+      if (!fs.existsSync(this._dataDir)) {
+        fs.mkdirSync(this._dataDir, { recursive: true });
+      }
+
+      // Create Hypercore with file storage
+      this.core = new Hypercore(this._dataDir);
+      await this.core.ready();
+
+      // Create Hyperbee on top of Hypercore
+      this.bee = new Hyperbee(this.core, {
+        keyEncoding: "utf8",
+        valueEncoding: "json",
+      });
+      await this.bee.ready();
+
+      // Get the public key from Hypercore
+      this._publicKey = this.core.key.toString("hex");
+      this.opened = true;
+
+      this.log("info", "Storage opened", { publicKey: this._publicKey });
+
+      return ok(this._publicKey);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.log("error", "Storage open failed", { error: errMsg });
+      return err(new StorageOpenError(errMsg, error instanceof Error ? error : undefined));
     }
-
-    // Create Hypercore with file storage
-    this.core = new Hypercore(this._dataDir);
-    await this.core.ready();
-
-    // Create Hyperbee on top of Hypercore
-    this.bee = new Hyperbee(this.core, {
-      keyEncoding: "utf8",
-      valueEncoding: "json",
-    });
-    await this.bee.ready();
-
-    // Get the public key from Hypercore
-    this._publicKey = this.core.key.toString("hex");
-    this.opened = true;
   }
 
   /**
    * Close the store.
    */
-  async close(): Promise<void> {
-    this.opened = false;
-    this.core = null;
-    this.bee = null;
+  async close(): Promise<Result<void, StorageError>> {
+    try {
+      this.log("info", "Closing storage", { publicKey: this._publicKey });
+      
+      this.opened = false;
+      this.core = null;
+      this.bee = null;
+      this._publicKey = "";
+      
+      return ok(undefined);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      return err(new StorageError(errMsg));
+    }
   }
 
   /**
    * Put a value with automatic secondary index updates and merge handling.
    */
-  async put(key: string, value: unknown): Promise<void> {
-    if (!this.bee) throw new Error("Store not opened");
-
-    const incoming = value as Record<string, unknown>;
-
-    // Check for existing record - if so, merge
-    const existing = await this.bee.get(key);
-    const existingData = existing?.value as Record<string, unknown> | undefined;
-
-    let mergedData: Record<string, unknown>;
-    if (existingData) {
-      // Merge the records
-      mergedData = this.mergeRecords(existingData, incoming);
-    } else {
-      mergedData = { ...incoming };
+  async put(key: string, value: unknown): Promise<Result<void, StorageNotOpenedError | StoragePutError>> {
+    if (!this.bee) {
+      return err(new StorageNotOpenedError());
     }
 
-    // Put the merged primary record
-    await this.bee.put(key, mergedData);
+    try {
+      this.log("debug", "Putting record", { key, hasValue: !!value });
 
-    // Update name index if name exists
-    if (mergedData.name && typeof mergedData.name === "string") {
-      const normalizedName = this.normalizeName(mergedData.name);
-      await this.updateNameIndex(normalizedName, key);
-    }
+      const incoming = value as Record<string, unknown>;
 
-    // Update CRC32 index if crc32 exists
-    if (mergedData.crc32 && typeof mergedData.crc32 === "string") {
-      await this.updateCrc32Index(mergedData.crc32, key);
+      // Check for existing record - if so, merge
+      const existing = await this.bee.get(key);
+      const existingData = existing?.value as Record<string, unknown> | undefined;
+
+      let mergedData: Record<string, unknown>;
+      if (existingData) {
+        mergedData = this.mergeRecords(existingData, incoming);
+        this.log("debug", "Merged with existing record", { key });
+      } else {
+        mergedData = { ...incoming };
+      }
+
+      // Put the merged primary record
+      await this.bee.put(key, mergedData);
+
+      // Update name index if name exists
+      if (mergedData.name && typeof mergedData.name === "string") {
+        const normalizedName = this.normalizeName(mergedData.name);
+        await this.updateNameIndex(normalizedName, key);
+      }
+
+      // Update CRC32 index if crc32 exists
+      if (mergedData.crc32 && typeof mergedData.crc32 === "string") {
+        await this.updateCrc32Index(mergedData.crc32, key);
+      }
+
+      this.log("info", "Record put", { key, sources: mergedData.sources });
+
+      return ok(undefined);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.log("error", "Put failed", { key, error: errMsg });
+      return err(new StoragePutError(errMsg, key));
     }
   }
 
@@ -149,7 +241,7 @@ export class MetadataStore {
 
     // Merge other fields - prefer non-empty values from incoming
     for (const [key, value] of Object.entries(incoming)) {
-      if (key === "sources") continue; // Already handled
+      if (key === "sources") continue;
       if (value !== undefined && value !== null && value !== "") {
         result[key] = value;
       }
@@ -167,7 +259,6 @@ export class MetadataStore {
 
     let entry: IndexEntry;
     if (existing?.value) {
-      // Merge with existing entries
       const existingEntry = existing.value as IndexEntry;
       if (!existingEntry.hashes.includes(hash)) {
         entry = { hashes: [...existingEntry.hashes, hash] };
@@ -207,31 +298,53 @@ export class MetadataStore {
    * Get a value by key (SHA1 primary lookup).
    */
   async get(key: string): Promise<unknown | null> {
-    if (!this.bee) throw new Error("Store not opened");
-    const result = await this.bee.get(key);
-    return result?.value ?? null;
+    if (!this.bee) {
+      throw new Error("Store not opened");
+    }
+
+    try {
+      const result = await this.bee.get(key);
+      return result?.value ?? null;
+    } catch (error) {
+      this.log("error", "Get failed", { key, error: String(error) });
+      throw error;
+    }
   }
 
   /**
    * Delete a key and its indexes.
    */
-  async del(key: string): Promise<void> {
-    if (!this.bee) throw new Error("Store not opened");
-
-    const data = (await this.get(key)) as Record<string, unknown> | null;
-
-    // Delete primary record
-    await this.bee.del(key);
-
-    // Remove from name index
-    if (data?.name && typeof data.name === "string") {
-      const normalizedName = this.normalizeName(data.name);
-      await this.removeFromNameIndex(normalizedName, key);
+  async del(key: string): Promise<Result<void, StorageNotOpenedError | StorageDelError>> {
+    if (!this.bee) {
+      return err(new StorageNotOpenedError());
     }
 
-    // Remove from CRC32 index
-    if (data?.crc32 && typeof data.crc32 === "string") {
-      await this.removeFromCrc32Index(data.crc32, key);
+    try {
+      this.log("debug", "Deleting record", { key });
+
+      const data = (await this.get(key)) as Record<string, unknown> | null;
+
+      // Delete primary record
+      await this.bee.del(key);
+
+      // Remove from name index
+      if (data?.name && typeof data.name === "string") {
+        const normalizedName = this.normalizeName(data.name);
+        await this.removeFromNameIndex(normalizedName, key);
+      }
+
+      // Remove from CRC32 index
+      if (data?.crc32 && typeof data.crc32 === "string") {
+        await this.removeFromCrc32Index(data.crc32, key);
+      }
+
+      this.log("info", "Record deleted", { key });
+
+      return ok(undefined);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.log("error", "Delete failed", { key, error: errMsg });
+      return err(new StorageDelError(errMsg, key));
     }
   }
 
@@ -277,7 +390,9 @@ export class MetadataStore {
    * Iterate all entries (for replication).
    */
   async *entries(): AsyncGenerator<[string, unknown]> {
-    if (!this.bee) throw new Error("Store not opened");
+    if (!this.bee) {
+      throw new Error("Store not opened");
+    }
     for await (const entry of this.bee.createReadStream()) {
       yield [entry.key, entry.value];
     }

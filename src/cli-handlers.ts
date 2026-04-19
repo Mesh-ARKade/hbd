@@ -1,65 +1,239 @@
 /**
  * CLI command handlers for HBD commands.
+ * Refactored to use Result pattern and Pino logging.
  * @packageDocumentation
  */
 
-import { MetadataStore } from "../storage/hyperbee.js";
+import { MetadataStore } from "./storage/hyperbee";
+import { ok, err, Result } from "./core/result";
+import { Logger } from "pino";
 
 /**
  * Add a ROM to the catalog.
  */
-export async function handleAdd(key: string, data: unknown, store: MetadataStore): Promise<boolean> {
+export async function handleAdd(
+  key: string, 
+  data: unknown, 
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<boolean, Error>> {
   try {
-    await store.open();
-    await store.put(key, data);
-    return true;
-  } catch {
-    return false;
+    if (logger) {
+      logger.info("Add command started", { key });
+    }
+    
+    const openResult = await store.open();
+    if (!openResult.ok) {
+      if (logger) {
+        logger.error({ key, error: openResult.error.message }, "Add failed: store open error");
+      }
+      return err(openResult.error);
+    }
+
+    const putResult = await store.put(key, data);
+    if (!putResult.ok) {
+      if (logger) {
+        logger.error({ key, error: putResult.error.message }, "Add failed: put error");
+      }
+      return err(putResult.error);
+    }
+
+    if (logger) {
+      logger.info({ key }, "Add command completed");
+    }
+    return ok(true);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ key, error: errMsg }, "Add command failed");
+    }
+    return err(new Error(errMsg));
   }
 }
 
 /**
  * Scan directory for ROMs.
  */
-export async function handleScan(store: MetadataStore): Promise<Array<{ key: string; value: unknown }>> {
-  await store.open();
-  const results: Array<{ key: string; value: unknown }> = [];
-  for await (const [key, value] of store.entries()) {
-    results.push({ key, value });
+export async function handleScan(
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<Array<{ key: string; value: unknown }>, Error>> {
+  try {
+    if (logger) {
+      logger.info("Scan command started");
+    }
+    
+    const openResult = await store.open();
+    if (!openResult.ok) {
+      if (logger) {
+        logger.error({ error: openResult.error.message }, "Scan failed: store open error");
+      }
+      return err(openResult.error);
+    }
+
+    const results: Array<{ key: string; value: unknown }> = [];
+    for await (const [key, value] of store.entries()) {
+      results.push({ key, value });
+    }
+
+    if (logger) {
+      logger.info({ count: results.length }, "Scan command completed");
+    }
+    return ok(results);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ error: errMsg }, "Scan command failed");
+    }
+    return err(new Error(errMsg));
   }
-  return results;
 }
 
 /**
  * List ROMs by system.
  */
-export async function handleList(system: string, store: MetadataStore): Promise<unknown[]> {
-  await store.open();
-  const results: unknown[] = [];
-  for await (const [key, value] of store.entries()) {
-    const data = value as Record<string, unknown>;
-    if (data.system === system) {
-      results.push(value);
+export async function handleList(
+  system: string, 
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<unknown[], Error>> {
+  try {
+    if (logger) {
+      logger.info({ system }, "List command started");
     }
+    
+    const openResult = await store.open();
+    if (!openResult.ok) {
+      if (logger) {
+        logger.error({ system, error: openResult.error.message }, "List failed: store open error");
+      }
+      return err(openResult.error);
+    }
+
+    const results: unknown[] = [];
+    for await (const [key, value] of store.entries()) {
+      const data = value as Record<string, unknown>;
+      if (data.system === system) {
+        results.push(value);
+      }
+    }
+
+    if (logger) {
+      logger.info({ system, count: results.length }, "List command completed");
+    }
+    return ok(results);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ system, error: errMsg }, "List command failed");
+    }
+    return err(new Error(errMsg));
   }
-  return results;
 }
 
 /**
  * Get info for a specific ROM.
  */
-export async function handleInfo(key: string, store: MetadataStore): Promise<unknown | null> {
-  await store.open();
-  return store.get(key);
+export async function handleInfo(
+  key: string, 
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<unknown | null, Error>> {
+  try {
+    if (logger) {
+      logger.info({ key }, "Info command started");
+    }
+    
+    const openResult = await store.open();
+    if (!openResult.ok) {
+      if (logger) {
+        logger.error({ key, error: openResult.error.message }, "Info failed: store open error");
+      }
+      return err(openResult.error);
+    }
+
+    const value = await store.get(key);
+    
+    if (logger) {
+      logger.info({ key }, "Info command completed");
+    }
+    return ok(value);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ key, error: errMsg }, "Info command failed");
+    }
+    return err(new Error(errMsg));
+  }
 }
 
 /**
  * Get sync status.
  */
-export async function handleSync(store: MetadataStore): Promise<{ publicKey: string; peers: number }> {
-  await store.open();
-  return {
-    publicKey: store.getPublicKey(),
-    peers: 0,
-  };
+export async function handleSync(
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<{ publicKey: string; peers: number }, Error>> {
+  try {
+    if (logger) {
+      logger.info("Sync command started");
+    }
+    
+    const openResult = await store.open();
+    if (!openResult.ok) {
+      if (logger) {
+        logger.error({ error: openResult.error.message }, "Sync failed: store open error");
+      }
+      return err(openResult.error);
+    }
+
+    const status = {
+      publicKey: store.getPublicKey(),
+      peers: 0,
+    };
+
+    if (logger) {
+      logger.info({ publicKey: status.publicKey }, "Sync command completed");
+    }
+    return ok(status);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ error: errMsg }, "Sync command failed");
+    }
+    return err(new Error(errMsg));
+  }
+}
+
+/**
+ * Initialize a new HBD store.
+ */
+export async function handleInit(
+  store: MetadataStore,
+  logger?: Logger
+): Promise<Result<{ publicKey: string }, Error>> {
+  try {
+    if (logger) {
+      logger.info("Init command started");
+    }
+    
+    const result = await store.open();
+    if (!result.ok) {
+      if (logger) {
+        logger.error({ error: result.error.message }, "Init failed");
+      }
+      return err(result.error);
+    }
+
+    if (logger) {
+      logger.info({ publicKey: result.value }, "Init command completed");
+    }
+    return ok({ publicKey: result.value });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ error: errMsg }, "Init command failed");
+    }
+    return err(new Error(errMsg));
+  }
 }
