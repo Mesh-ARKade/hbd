@@ -124,16 +124,21 @@ describe("NoIntroScraper - Coverage Tests", () => {
       );
     });
 
-    it("should throw error if no extracted directory", async () => {
+    it("should return error if no extracted directory", async () => {
       const scraper = new NoIntroScraper({
         dataDir: testDir,
         logger: mockLogger,
       });
 
-      await expect(scraper.parse()).rejects.toThrow("No extracted directory found");
+      const result = await scraper.parse();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toContain("No extracted directory found");
+      }
     });
 
-    it("should throw error if no DAT files found", async () => {
+    it("should return error if no DAT files found", async () => {
       const extractDir = path.join(testDir, "empty-pack");
       fs.mkdirSync(extractDir, { recursive: true });
 
@@ -142,7 +147,12 @@ describe("NoIntroScraper - Coverage Tests", () => {
         logger: mockLogger,
       });
 
-      await expect(scraper.parse()).rejects.toThrow("No DAT files found");
+      const result = await scraper.parse();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toContain("No DAT files found");
+      }
     });
   });
 

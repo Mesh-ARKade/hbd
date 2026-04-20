@@ -142,45 +142,54 @@ export abstract class AbstractScraper {
   /**
    * Abstract method - fetch metadata source.
    * Must be implemented by subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  abstract fetch(): Promise<void>;
+  abstract fetch(): Promise<Result<void, Error>>;
 
   /**
    * Abstract method - download raw data.
    * Must be implemented by subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  abstract download(): Promise<void>;
+  abstract download(): Promise<Result<void, Error>>;
 
   /**
    * Decompress downloaded archive.
    * Default implementation does nothing. Override in subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async decompress(_zipPath?: string): Promise<Result<unknown, Error> | void> {
+  async decompress(): Promise<Result<void, Error>> {
     // Default: no-op. Override in subclasses that need decompression.
+    return ok(void 0);
   }
 
   /**
    * Abstract method - parse decompressed data.
    * Must be implemented by subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  abstract parse(): Promise<void>;
+  abstract parse(): Promise<Result<void, Error>>;
 
   /**
    * Merge parsed data with existing catalog.
    * Can be overridden by subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async merge(): Promise<void> {
+  async merge(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Merge);
     this.logger.info({ scraper: this.name }, "Merge phase (default: no-op)");
+    return ok(void 0);
   }
 
   /**
    * Write merged data to storage.
    * Can be overridden by subclasses.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async write(): Promise<void> {
+  async write(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Write);
     this.logger.info({ scraper: this.name }, "Write phase (default: no-op)");
+    return ok(void 0);
   }
 
   /**
@@ -199,75 +208,125 @@ export abstract class AbstractScraper {
 
   /**
    * Run the complete scraper lifecycle.
-   * Orchestrates all phases in order.
+   * Orchestrates all phases in order with Result pattern.
+   * If any phase returns an error, the pipeline stops and returns that error.
    */
   async run(): Promise<Result<ScraperResult, Error>> {
     this.cancelled = false;
     this._entriesParsed = 0;
     this._entriesWritten = 0;
 
-    try {
-      // Phase 1: Fetch
-      this.checkCancelled();
-      this.setPhase(ScraperPhase.Fetch);
-      await this.fetch();
-      this.checkCancelled();
-
-      // Phase 2: Download
-      this.setPhase(ScraperPhase.Download);
-      await this.download();
-      this.checkCancelled();
-
-      // Phase 3: Decompress
-      this.setPhase(ScraperPhase.Decompress);
-      await this.decompress();
-      this.checkCancelled();
-
-      // Phase 4: Parse
-      this.setPhase(ScraperPhase.Parse);
-      await this.parse();
-      this.checkCancelled();
-
-      // Phase 5: Merge
-      this.setPhase(ScraperPhase.Merge);
-      await this.merge();
-      this.checkCancelled();
-
-      // Phase 6: Write
-      this.setPhase(ScraperPhase.Write);
-      await this.write();
-
-      // Complete
-      this.setPhase(ScraperPhase.Complete);
-      this.logger.info(
-        {
-          scraper: this.name,
-          entriesParsed: this._entriesParsed,
-          entriesWritten: this._entriesWritten,
-        },
-        "Scraper run complete"
-      );
-
-      return ok({
-        phase: ScraperPhase.Complete,
-        entriesParsed: this._entriesParsed,
-        entriesWritten: this._entriesWritten,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (this.cancelled) {
-        this.setPhase(ScraperPhase.Cancelled);
-        return err(new Error("Scraper cancelled"));
-      }
-
+    // Phase 1: Fetch
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Fetch);
+    const fetchResult = await this.fetch();
+    if (!fetchResult.ok) {
       this.setPhase(ScraperPhase.Error);
       this.logger.error(
-        { scraper: this.name, error: errorMessage, phase: this.currentPhase },
-        "Scraper run failed"
+        { scraper: this.name, error: fetchResult.error.message, phase: "fetch" },
+        "Fetch phase failed"
       );
-
-      return err(error instanceof Error ? error : new Error(errorMessage));
+      return err(fetchResult.error);
     }
+
+    // Phase 2: Download
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Download);
+    const downloadResult = await this.download();
+    if (!downloadResult.ok) {
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: downloadResult.error.message, phase: "download" },
+        "Download phase failed"
+      );
+      return err(downloadResult.error);
+    }
+
+    // Phase 3: Decompress
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Decompress);
+    const decompressResult = await this.decompress();
+    if (!decompressResult.ok) {
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: decompressResult.error.message, phase: "decompress" },
+        "Decompress phase failed"
+      );
+      return err(decompressResult.error);
+    }
+
+    // Phase 4: Parse
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Parse);
+    const parseResult = await this.parse();
+    if (!parseResult.ok) {
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: parseResult.error.message, phase: "parse" },
+        "Parse phase failed"
+      );
+      return err(parseResult.error);
+    }
+
+    // Phase 5: Merge
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Merge);
+    const mergeResult = await this.merge();
+    if (!mergeResult.ok) {
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: mergeResult.error.message, phase: "merge" },
+        "Merge phase failed"
+      );
+      return err(mergeResult.error);
+    }
+
+    // Phase 6: Write
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    this.setPhase(ScraperPhase.Write);
+    const writeResult = await this.write();
+    if (!writeResult.ok) {
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: writeResult.error.message, phase: "write" },
+        "Write phase failed"
+      );
+      return err(writeResult.error);
+    }
+
+    // Complete
+    this.setPhase(ScraperPhase.Complete);
+    this.logger.info(
+      {
+        scraper: this.name,
+        entriesParsed: this._entriesParsed,
+        entriesWritten: this._entriesWritten,
+      },
+      "Scraper run complete"
+    );
+
+    return ok({
+      phase: ScraperPhase.Complete,
+      entriesParsed: this._entriesParsed,
+      entriesWritten: this._entriesWritten,
+    });
   }
 }

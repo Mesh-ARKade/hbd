@@ -215,13 +215,18 @@ describe("NoIntroScraper", () => {
   });
 
   describe("parse", () => {
-    it("should throw error if no extracted directory", async () => {
+    it("should return error if no extracted directory", async () => {
       const scraper = new NoIntroScraper({
         dataDir: testDir,
         logger: mockLogger,
       });
 
-      await expect(scraper.parse()).rejects.toThrow("No extracted directory found");
+      const result = await scraper.parse();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toContain("No extracted directory found");
+      }
     });
   });
 
