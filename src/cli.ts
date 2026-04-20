@@ -294,4 +294,44 @@ program
     }
   });
 
+program
+  .command("scrape")
+  .description("Scrape metadata from No-Intro")
+  .option("-d, --dir <directory>", "Data directory", ".hbd-data")
+  .option("-s, --system <system>", "Target system(s) - comma separated (e.g., nes,snes,gb)")
+  .action(async (options) => {
+    logger.info({ dir: options.dir, system: options.system }, "Scrape command invoked");
+
+    const dataDir = path.resolve(options.dir);
+
+    if (!fs.existsSync(dataDir)) {
+      logger.error({ dataDir }, "Directory not initialized");
+      console.error(`HBD not initialized. Run: hbd init -d ${options.dir}`);
+      process.exit(1);
+    }
+
+    console.log("Starting No-Intro scrape...");
+    if (options.system) {
+      console.log(`Target systems: ${options.system}`);
+    }
+
+    const { handleScrape } = await import("./cli-handlers.js");
+    const result = await handleScrape(
+      {
+        dataDir,
+        system: options.system,
+      },
+      logger
+    );
+
+    if (isOk(result)) {
+      console.log(`✓ Scrape complete! Processed ${result.value.recordsProcessed} records`);
+      logger.info({ records: result.value.recordsProcessed }, "Scrape completed");
+    } else {
+      logger.error({ error: result.error.message }, "Scrape failed");
+      console.error(`✗ Scrape failed: ${result.error.message}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();

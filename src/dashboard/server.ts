@@ -9,7 +9,8 @@ import fastifyStatic from "@fastify/static";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { createLogger, Logger } from "../core/logger.js";
+import { createLogger } from "../core/logger.js";
+import type { Logger } from "pino";
 
 export interface DashboardServerOptions {
   /** Data directory path */

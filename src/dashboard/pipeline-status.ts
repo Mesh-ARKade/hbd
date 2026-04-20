@@ -5,10 +5,10 @@
  */
 
 import { EventEmitter } from "node:events";
-import { ok, err, Result } from "../core/result";
+import { ok, err, Result } from "../core/result.js";
 
 /** Status values for a metadata source */
-export type SourceStatusValue = "pending" | "running" | "completed" | "error" | "cancelled";
+export type SourceStatusValue = "idle" | "pending" | "running" | "completed" | "error" | "cancelled";
 
 /** Individual source state */
 export interface SourceStatus {
@@ -24,6 +24,10 @@ export interface SourceStatus {
   progress: number;
   /** Current operation phase */
   phase?: string;
+  /** Current sub-phase (e.g., specific file being processed) */
+  subPhase?: string;
+  /** Sub-phase progress percentage (0-100) */
+  subProgress?: number;
   /** Timestamp when started */
   startedAt?: number;
   /** Timestamp when completed */
@@ -34,6 +38,16 @@ export interface SourceStatus {
   metadata?: Record<string, unknown>;
   /** Records processed (for completed sources) */
   recordsProcessed?: number;
+  /** Files processed in current batch */
+  filesProcessed?: number;
+  /** Total files in current batch */
+  totalFiles?: number;
+  /** Bytes processed */
+  bytesProcessed?: number;
+  /** Total bytes */
+  bytesTotal?: number;
+  /** Estimated time remaining in seconds */
+  etaSeconds?: number;
 }
 
 /** Overall pipeline state */
@@ -66,6 +80,19 @@ export interface ProgressUpdate {
   phase?: string;
   status?: SourceStatusValue;
   metadata?: Record<string, unknown>;
+}
+
+/** Granular sub-phase progress update */
+export interface SubPhaseUpdate {
+  phase: string;
+  subPhase?: string;
+  subProgress?: number;
+  overallProgress?: number;
+  filesProcessed?: number;
+  totalFiles?: number;
+  bytesProcessed?: number;
+  bytesTotal?: number;
+  etaSeconds?: number;
 }
 
 /**
@@ -143,6 +170,62 @@ export class PipelineStatus extends EventEmitter {
 
     this.sources.set(id, source);
     return source;
+  }
+
+  /**
+   * Update sub-phase progress for granular tracking.
+   */
+  updateSubPhase(id: string, update: SubPhaseUpdate): Result<SourceStatus, Error> {
+    const source = this.sources.get(id);
+    if (!source) {
+      return err(new Error(`Source '${id}' not found`));
+    }
+
+    // Validate sub-progress bounds
+    if (update.subProgress !== undefined) {
+      if (update.subProgress < 0 || update.subProgress > 100) {
+        return err(new Error("Sub-progress must be between 0 and 100"));
+      }
+    }
+
+    // Update phase
+    source.phase = update.phase;
+
+    // Update sub-phase fields
+    if (update.subPhase !== undefined) {
+      source.subPhase = update.subPhase;
+    }
+    if (update.subProgress !== undefined) {
+      source.subProgress = update.subProgress;
+    }
+    if (update.overallProgress !== undefined) {
+      source.progress = update.overallProgress;
+    }
+    if (update.filesProcessed !== undefined) {
+      source.filesProcessed = update.filesProcessed;
+    }
+    if (update.totalFiles !== undefined) {
+      source.totalFiles = update.totalFiles;
+    }
+    if (update.bytesProcessed !== undefined) {
+      source.bytesProcessed = update.bytesProcessed;
+    }
+    if (update.bytesTotal !== undefined) {
+      source.bytesTotal = update.bytesTotal;
+    }
+    if (update.etaSeconds !== undefined) {
+      source.etaSeconds = update.etaSeconds;
+    }
+
+    // Emit granular progress event
+    this.emit("granularProgress", {
+      id,
+      ...update,
+      timestamp: Date.now(),
+    });
+
+    this.emitChange();
+    return ok({ ...source });
   }
 
   /**

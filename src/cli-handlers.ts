@@ -335,3 +335,108 @@ export async function handleDashboard(
     return err(new Error(errMsg));
   }
 }
+
+// Import NoIntroScraper dynamically to avoid circular dependencies
+const { NoIntroScraper } = await import("./scrapers/sources/nointro.js");
+
+/**
+ * Options for scrape command.
+ */
+export interface ScrapeOptions {
+  dataDir: string;
+  system?: string;
+  pipeline?: {
+    update: (phase: string, progress?: number, message?: string) => void;
+  };
+}
+
+/**
+ * Scrape metadata from No-Intro.
+ */
+export async function handleScrape(
+  options: ScrapeOptions,
+  logger?: Logger
+): Promise<Result<{ success: true; recordsProcessed: number }, Error>> {
+  try {
+    if (logger) {
+      logger.info({ dataDir: options.dataDir, system: options.system }, "Scrape command started");
+    }
+
+    const dataDir = path.resolve(options.dataDir);
+
+    // Check if data directory exists
+    if (!fs.existsSync(dataDir)) {
+      const error = new Error(`Data directory does not exist: ${dataDir}`);
+      if (logger) {
+        logger.error({ dataDir, error: error.message }, "Scrape failed: directory not found");
+      }
+      return err(error);
+    }
+
+    // Parse systems if provided
+    const systems = options.system ? options.system.split(",") : ["all"];
+    if (logger) {
+      logger.info({ systems }, `Scraping ${systems.length} system(s)`);
+    }
+
+    // Create pipeline status for tracking
+    const pipeline = options.pipeline ?? {
+      update: (phase: string, progress?: number, message?: string) => {
+        if (logger) {
+          logger.debug({ phase, progress, message }, "Pipeline update");
+        }
+      },
+    };
+
+    // Create and run the No-Intro scraper
+    const scraper = new NoIntroScraper({
+      dataDir,
+      logger: logger?.child({ system: "scraper" }),
+    });
+
+    // Register source in pipeline
+    pipeline.update("register", 0, "No-Intro scraper initialized");
+
+    if (logger) {
+      logger.info("Starting No-Intro scrape");
+    }
+
+    // Run the scraper lifecycle
+    const runResult = await scraper.run();
+
+    if (!runResult.ok) {
+      const error = runResult.error;
+      if (logger) {
+        logger.error({ error: error.message }, "Scrape failed");
+      }
+      await scraper.close();
+      return err(error);
+    }
+
+    // Get records processed
+    const recordsProcessed = runResult.value.entriesParsed ?? 0;
+
+    if (logger) {
+      logger.info(
+        { recordsProcessed, phase: runResult.value.phase },
+        "Scrape completed successfully"
+      );
+    }
+
+    pipeline.update("complete", 100, `Processed ${recordsProcessed} records`);
+
+    // Cleanup
+    await scraper.close();
+
+    return ok({
+      success: true,
+      recordsProcessed,
+    });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (logger) {
+      logger.error({ error: errMsg }, "Scrape command failed");
+    }
+    return err(new Error(errMsg));
+  }
+}

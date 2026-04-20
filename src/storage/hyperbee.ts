@@ -7,7 +7,7 @@
 import Hyperbee from "hyperbee";
 import Hypercore from "hypercore";
 import * as fs from "node:fs";
-import { ok, err, Result } from "../core/result";
+import { ok, err, Result, isErr } from "../core/result.js";
 import { StorageError, StorageNotOpenedError, StorageOperationError } from "./errors.js";
 import { Logger, pino } from "pino";
 
@@ -76,12 +76,15 @@ export class MetadataStore {
    */
   private log(level: string, message: string, meta: Record<string, unknown> = {}): void {
     if (this.logger) {
-      this.logger[level as keyof Logger]({
-        system: "storage",
-        sha1: this._publicKey,
-        dataDir: this._dataDir,
-        ...meta
-      }, message);
+      const logFn = (this.logger as Record<string, unknown>)[level];
+      if (typeof logFn === "function") {
+        (logFn as (...args: unknown[]) => void).call(this.logger, {
+          system: "storage",
+          sha1: this._publicKey,
+          dataDir: this._dataDir,
+          ...meta
+        }, message);
+      }
     }
   }
 
@@ -292,6 +295,52 @@ export class MetadataStore {
     }
 
     await this.bee!.put(indexKey, entry);
+  }
+
+  /**
+   * Batch put multiple records efficiently.
+   * Performs sequential puts with progress tracking.
+   */
+  async batchPut(
+    records: Array<{ key: string; value: Record<string, unknown> }>,
+    options?: { onProgress?: (processed: number, total: number) => void }
+  ): Promise<Result<{ count: number }, StorageError>> {
+    if (!this.opened || !this.bee) {
+      this.log("error", "Batch put failed - store not opened");
+      return err(new StorageNotOpenedError());
+    }
+
+    if (records.length === 0) {
+      return ok({ count: 0 });
+    }
+
+    try {
+      this.log("info", "Starting batch put", { count: records.length });
+
+      let processed = 0;
+
+      for (const record of records) {
+        const result = await this.put(record.key, record.value);
+        
+        if (isErr(result)) {
+          return err(new StoragePutError(result.error.message, record.key));
+        }
+
+        processed++;
+
+        // Report progress
+        if (options?.onProgress) {
+          options.onProgress(processed, records.length);
+        }
+      }
+
+      this.log("info", "Batch put complete", { count: processed });
+      return ok({ count: processed });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.log("error", "Batch put failed", { error: errMsg, count: records.length });
+      return err(new StoragePutError(errMsg, "batch"));
+    }
   }
 
   /**
