@@ -10,6 +10,7 @@ import { createMetadataStore } from "./storage/hyperbee.js";
 import { createSyncPeer } from "./p2p/sync.js";
 import { handleAdd, handleScan, handleList, handleInfo, handleSync, handleInit } from "./cli-handlers.js";
 import { createLogger } from "./core/logger.js";
+import pino from "pino";
 import { isOk, isErr } from "./core/result.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -17,7 +18,7 @@ import * as path from "node:path";
 // Create CLI logger
 const logger = createLogger({ 
   system: "cli", 
-  level: process.env.HBD_LOG_LEVEL || "info" 
+  level: (process.env.HBD_LOG_LEVEL as pino.Level) || "info" 
 });
 
 const program = new Command();

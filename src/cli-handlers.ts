@@ -4,8 +4,8 @@
  * @packageDocumentation
  */
 
-import { MetadataStore } from "./storage/hyperbee";
-import { ok, err, Result } from "./core/result";
+import { MetadataStore } from "./storage/hyperbee.js";
+import { ok, err, Result } from "./core/result.js";
 import { Logger } from "pino";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -21,7 +21,7 @@ export async function handleAdd(
 ): Promise<Result<boolean, Error>> {
   try {
     if (logger) {
-      logger.info("Add command started", { key });
+      logger.info({ key }, "Add command started");
     }
     
     const openResult = await store.open();

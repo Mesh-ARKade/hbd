@@ -82,12 +82,24 @@ export class SyncPeer {
    */
   private log(level: string, message: string, meta: Record<string, unknown> = {}): void {
     if (this.logger) {
-      this.logger[level as keyof Logger]({
-        system: "p2p",
-        localPublicKey: this._publicKey,
-        dataDir: this.dataDir,
-        ...meta
-      }, message);
+      // Use switch to avoid union type issues with dynamic key access
+      switch (level) {
+        case "error":
+          this.logger.error({ system: "p2p", localPublicKey: this._publicKey, dataDir: this.dataDir, ...meta }, message);
+          break;
+        case "warn":
+          this.logger.warn({ system: "p2p", localPublicKey: this._publicKey, dataDir: this.dataDir, ...meta }, message);
+          break;
+        case "info":
+          this.logger.info({ system: "p2p", localPublicKey: this._publicKey, dataDir: this.dataDir, ...meta }, message);
+          break;
+        case "debug":
+          this.logger.debug({ system: "p2p", localPublicKey: this._publicKey, dataDir: this.dataDir, ...meta }, message);
+          break;
+        case "trace":
+          this.logger.trace({ system: "p2p", localPublicKey: this._publicKey, dataDir: this.dataDir, ...meta }, message);
+          break;
+      }
     }
   }
 

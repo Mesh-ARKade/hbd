@@ -5,7 +5,7 @@
  * Based on the design in openspec/changes/s5-resilience-observability/design.md
  */
 
-import { ok, err, Result } from './result'
+import { ok, err, Result } from './result.js'
 
 export interface RetryOptions {
   /** Maximum number of attempts (default: 3) */
@@ -76,7 +76,7 @@ export async function retry<T>(
     ...options,
   }
 
-  let lastError: Error
+  let lastError: Error | undefined = undefined;
 
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
     try {

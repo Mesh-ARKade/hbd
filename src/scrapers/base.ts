@@ -152,10 +152,12 @@ export abstract class AbstractScraper {
   abstract download(): Promise<void>;
 
   /**
-   * Abstract method - decompress downloaded archive.
-   * Must be implemented by subclasses.
+   * Decompress downloaded archive.
+   * Default implementation does nothing. Override in subclasses.
    */
-  abstract decompress(): Promise<void>;
+  async decompress(_zipPath?: string): Promise<Result<unknown, Error> | void> {
+    // Default: no-op. Override in subclasses that need decompression.
+  }
 
   /**
    * Abstract method - parse decompressed data.

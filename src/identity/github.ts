@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { ok, err, Result } from "../core/result";
+import { ok, err, Result } from "../core/result.js";
 import { GitHubConfigError, GitHubAuthError, GitHubNetworkError } from "./errors.js";
 
 export interface GitHubConfig {

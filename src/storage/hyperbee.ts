@@ -76,14 +76,23 @@ export class MetadataStore {
    */
   private log(level: string, message: string, meta: Record<string, unknown> = {}): void {
     if (this.logger) {
-      const logFn = (this.logger as Record<string, unknown>)[level];
-      if (typeof logFn === "function") {
-        (logFn as (...args: unknown[]) => void).call(this.logger, {
-          system: "storage",
-          sha1: this._publicKey,
-          dataDir: this._dataDir,
-          ...meta
-        }, message);
+      // Use switch to avoid union type issues with dynamic key access
+      switch (level) {
+        case "error":
+          this.logger.error({ system: "storage", sha1: this._publicKey, dataDir: this._dataDir, ...meta }, message);
+          break;
+        case "warn":
+          this.logger.warn({ system: "storage", sha1: this._publicKey, dataDir: this._dataDir, ...meta }, message);
+          break;
+        case "info":
+          this.logger.info({ system: "storage", sha1: this._publicKey, dataDir: this._dataDir, ...meta }, message);
+          break;
+        case "debug":
+          this.logger.debug({ system: "storage", sha1: this._publicKey, dataDir: this._dataDir, ...meta }, message);
+          break;
+        case "trace":
+          this.logger.trace({ system: "storage", sha1: this._publicKey, dataDir: this._dataDir, ...meta }, message);
+          break;
       }
     }
   }
