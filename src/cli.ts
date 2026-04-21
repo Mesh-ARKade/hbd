@@ -30,7 +30,7 @@ program
 
 program
   .command("init")
-  .description("Initialize a new HBD catalog")
+  .description("Initialize a new HBD catalog using GitHub Vault")
   .option("-d, --dir <directory>", "Data directory", ".hbd-data")
   .action(async (options) => {
     logger.info({ dir: options.dir }, "Init command invoked");
@@ -47,9 +47,17 @@ program
     const result = await handleInit(store, logger);
     
     if (isOk(result)) {
-      console.log(`Initialized HBD catalog at ${dataDir}`);
+      console.log(`\nInitialized HBD catalog at ${dataDir}`);
       console.log(`Public Key: ${result.value.publicKey}`);
-      logger.info({ dataDir, publicKey: result.value.publicKey }, "Init completed");
+      console.log(`Curator: ${result.value.username}`);
+      
+      console.log("\n" + "═".repeat(60));
+      console.log("✅ GitHub Vault Authentication Successful");
+      console.log("═".repeat(60));
+      console.log("Your writer key has been fetched from the vault.");
+      console.log("═".repeat(60) + "\n");
+
+      logger.info({ dataDir, publicKey: result.value.publicKey, username: result.value.username }, "Init completed");
     } else {
       logger.error({ error: result.error.message }, "Init failed");
       console.error(`Failed to initialize: ${result.error.message}`);

@@ -216,6 +216,34 @@ describe("CLI Command Handlers - Full Coverage", () => {
       await robustRm(newDir);
     });
 
+    it("should initialize with a provided mnemonic", async () => {
+      const newDir = getUniqueTestDir(".hbd-init-mnemonic");
+      const newStore = createMetadataStore(newDir);
+      const testMnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
+      
+      const result = await handleInit(newStore, undefined, { mnemonic: testMnemonic });
+      
+      expect(isOk(result)).toBe(true);
+      expect(result.value.mnemonic).toBe(testMnemonic);
+      expect(result.value.publicKey).toBeDefined();
+      
+      await newStore.close();
+      await robustRm(newDir);
+    });
+
+    it("should return error for invalid mnemonic", async () => {
+      const newDir = getUniqueTestDir(".hbd-init-invalid");
+      const newStore = createMetadataStore(newDir);
+      const invalidMnemonic = "invalid mnemonic phrase";
+      
+      const result = await handleInit(newStore, undefined, { mnemonic: invalidMnemonic });
+      
+      expect(isErr(result)).toBe(true);
+      
+      await newStore.close();
+      await robustRm(newDir);
+    });
+
     it("should init with logger", async () => {
       const newDir = getUniqueTestDir(".hbd-init-log");
       const newStore = createMetadataStore(newDir);

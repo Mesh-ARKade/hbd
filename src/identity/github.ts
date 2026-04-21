@@ -8,7 +8,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getConfigDir } from "./keyStore.js";
 import { ok, err, Result } from "../core/result.js";
-import { GitHubConfigError, GitHubAuthError, GitHubNetworkError } from "./errors.js";
+import {
+  GitHubConfigError,
+  GitHubAuthError,
+  GitHubNetworkError,
+  UnauthorizedError,
+  OrgMembershipError,
+} from "./errors.js";
 
 export interface GitHubConfig {
   clientId: string;
@@ -196,3 +202,88 @@ export function loadGitHubIdentity(): GitHubUser | null {
 function isErr<T, E>(result: Result<T, E>): result is { ok: false; error: E } {
   return result.ok === false;
 }
+
+/**
+ * Verify if authenticated user is a member of a GitHub organization.
+ * @param org - Organization name to check
+ * @param accessToken - GitHub access token (uses cached if not provided)
+ * @returns Result containing true if member, UnauthorizedError if not
+ */
+export async function verifyOrgMembership(
+  org: string,
+  accessToken?: string
+): Promise<Result<boolean, Error>> {
+  // Get token from cache if not provided
+  const token = accessToken || getCachedAccessToken();
+  
+  if (!token) {
+    return err(new UnauthorizedError("GitHub authentication required. Please run 'hbd auth github' first."));
+  }
+
+  try {
+    // Check org membership via GitHub API
+    const response = await fetch(`https://api.github.com/orgs/${org}/memberships/${await getCurrentUserLogin(token)}`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (response.status === 204) {
+      // 204 = member (including owner)
+      return ok(true);
+    }
+
+    if (response.status === 404) {
+      // 404 = not a member
+      return err(new OrgMembershipError(org));
+    }
+
+    if (response.status === 401) {
+      return err(new UnauthorizedError("Invalid GitHub token. Please re-authenticate."));
+    }
+
+    // Other errors
+    const errorText = await response.text();
+    return err(new Error(`GitHub API error: ${response.status} ${errorText}`));
+  } catch (error) {
+    return err(new Error(`Network error verifying org membership: ${error instanceof Error ? error.message : String(error)}`));
+  }
+}
+
+/**
+ * Get cached access token from storage.
+ */
+function getCachedAccessToken(): string | null {
+  try {
+    const configDir = getConfigDir();
+    const tokenPath = path.join(configDir, "github-token.json");
+    if (!fs.existsSync(tokenPath)) {
+      return null;
+    }
+    const content = fs.readFileSync(tokenPath, "utf8");
+    const data = JSON.parse(content);
+    return data.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get current user login from token.
+ */
+async function getCurrentUserLogin(token: string): Promise<string> {
+  try {
+    const response = await fetch("https://api.github.com/user", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      return "unknown";
+    }
+    const user = await response.json();
+    return user.login || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+

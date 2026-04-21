@@ -52,9 +52,25 @@ class DashboardClient {
       const data = await response.json();
       
       if (data.github) {
+        // Update header profile
         this.elements.githubUsername.textContent = data.github.login;
         this.elements.githubAvatar.src = data.github.avatar_url || '';
         this.elements.curatorProfile.classList.remove('hidden');
+        
+        // Update nav bar curator ID
+        const curatorId = document.getElementById('curator-id');
+        const curatorAvatar = document.getElementById('curator-avatar');
+        const curatorName = document.getElementById('curator-name');
+        
+        if (curatorId && curatorName) {
+          curatorName.textContent = data.github.login;
+          if (curatorAvatar && data.github.avatar_url) {
+            curatorAvatar.src = data.github.avatar_url;
+            curatorAvatar.alt = data.github.login;
+          }
+          curatorId.classList.remove('hidden');
+        }
+        
         this.logToTerminal('info', `Authenticated as curator: ${data.github.login}`);
       }
       
@@ -91,6 +107,161 @@ class DashboardClient {
     const maxParallel = document.getElementById('max-parallel');
     if (maxParallel) {
       maxParallel.addEventListener('change', (e) => this.handleMaxParallelChange(e.target.value));
+    }
+
+    // Navigation tabs
+    const navPipeline = document.getElementById('nav-pipeline');
+    const navSettings = document.getElementById('nav-settings');
+    if (navPipeline && navSettings) {
+      navPipeline.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showPanel('pipeline');
+      });
+      navSettings.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showPanel('settings');
+      });
+    }
+
+    // Settings panel
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+    }
+
+    const githubAuthBtn = document.getElementById('github-auth-btn');
+    if (githubAuthBtn) {
+      githubAuthBtn.addEventListener('click', () => this.connectGitHub());
+    }
+
+    // Load initial settings
+    this.loadSettings();
+  }
+
+  /**
+   * Show a specific panel (pipeline or settings).
+   */
+  showPanel(panel) {
+    const pipelineGrid = document.getElementById('pipeline-grid');
+    const settingsPanel = document.getElementById('settings-panel');
+    const navPipeline = document.getElementById('nav-pipeline');
+    const navSettings = document.getElementById('nav-settings');
+
+    if (panel === 'settings') {
+      pipelineGrid?.classList.add('hidden');
+      settingsPanel?.classList.remove('hidden');
+      navSettings?.classList.add('text-[#33afa9]', 'border-b-2', 'border-[#33afa9]');
+      navPipeline?.classList.remove('text-[#fcfdfa]', 'border-b-2', 'border-[#33afa9]');
+    } else {
+      pipelineGrid?.classList.remove('hidden');
+      settingsPanel?.classList.add('hidden');
+      navPipeline?.classList.add('text-[#fcfdfa]', 'border-b-2', 'border-[#33afa9]');
+      navSettings?.classList.remove('text-[#33afa9]', 'border-b-2', 'border-[#33afa9]');
+    }
+  }
+
+  /**
+   * Load settings from server.
+   */
+  async loadSettings() {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        const mnemonicInput = document.getElementById('mnemonic-input');
+        if (mnemonicInput && data.mnemonic) {
+          mnemonicInput.value = data.mnemonic;
+        }
+        this.updateGitHubStatus(data.github);
+      }
+    } catch (error) {
+      this.logToTerminal('error', `Failed to load settings: ${error.message}`);
+    }
+  }
+
+  /**
+   * Save settings to server.
+   */
+  async saveSettings() {
+    const mnemonicInput = document.getElementById('mnemonic-input');
+    const mnemonic = mnemonicInput?.value?.trim();
+
+    if (!mnemonic) {
+      this.logToTerminal('error', 'Mnemonic is required');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mnemonic }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        this.logToTerminal('info', 'Settings saved successfully');
+      } else {
+        this.logToTerminal('error', data.error || 'Failed to save settings');
+      }
+    } catch (error) {
+      this.logToTerminal('error', `Save settings failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Connect GitHub account.
+   */
+  async connectGitHub() {
+    this.logToTerminal('info', 'Starting GitHub authentication...');
+    // This would trigger the device flow
+    try {
+      const response = await fetch('/api/auth/github/start', { method: 'POST' });
+      const data = await response.json();
+      if (data.verification_uri) {
+        this.logToTerminal('info', `Please visit: ${data.verification_uri}`);
+        this.logToTerminal('info', `User code: ${data.user_code}`);
+      }
+    } catch (error) {
+      this.logToTerminal('error', `GitHub auth failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update GitHub status display.
+   */
+  updateGitHubStatus(github) {
+    const statusDot = document.getElementById('github-status-dot');
+    const statusText = document.getElementById('github-status-text');
+    const userDisplay = document.getElementById('github-user');
+    const orgSection = document.getElementById('org-membership-section');
+    const orgStatusDot = document.getElementById('org-status-dot');
+    const orgStatusText = document.getElementById('org-status-text');
+
+    if (github?.connected) {
+      statusDot?.classList.remove('bg-yellow-500', 'bg-red-500');
+      statusDot?.classList.add('bg-green-500');
+      if (statusText) statusText.textContent = 'Connected';
+      if (userDisplay) {
+        userDisplay.classList.remove('hidden');
+        userDisplay.querySelector('span').textContent = github.login;
+      }
+      orgSection?.classList.remove('hidden');
+      if (github.orgMember) {
+        orgStatusDot?.classList.remove('bg-red-500');
+        orgStatusDot?.classList.add('bg-green-500');
+        if (orgStatusText) {
+          orgStatusText.textContent = 'Member';
+          orgStatusText.classList.remove('text-red-400');
+          orgStatusText.classList.add('text-green-400');
+        }
+      }
+    } else {
+      statusDot?.classList.remove('bg-green-500', 'bg-yellow-500');
+      statusDot?.classList.add('bg-red-500');
+      if (statusText) statusText.textContent = 'Disconnected';
+      userDisplay?.classList.add('hidden');
+      orgSection?.classList.add('hidden');
     }
   }
 
@@ -171,6 +342,9 @@ class DashboardClient {
       
       // Join the dashboard room
       this.socket.emit('room:join', 'dashboard');
+      
+      // Register default sources on connect
+      this.registerDefaultSources();
     });
 
     this.socket.on('disconnect', () => {
@@ -185,6 +359,117 @@ class DashboardClient {
     this.socket.on('log:entry', (log) => {
       this.handleLogEntry(log);
     });
+  }
+
+  /**
+   * Register default preservation sources.
+   */
+  registerDefaultSources() {
+    const defaultSources = [
+      { id: 'nointro', name: 'No-Intro', description: 'Cartridge-based systems preservation standard' },
+      { id: 'redump', name: 'Redump', description: 'Optical media preservation standard' },
+      { id: 'tosec', name: 'TOSEC', description: 'The Old School Emulation Center catalog' },
+      { id: 'mame', name: 'MAME', description: 'Multiple Arcade Machine Emulator software list' },
+    ];
+
+    // Only register if no sources exist yet
+    if (this.sources.size === 0) {
+      defaultSources.forEach(source => {
+        this.sources.set(source.id, {
+          ...source,
+          status: 'idle',
+          progress: 0,
+          phase: 'Ready',
+        });
+      });
+      
+      // Render the sources
+      this.renderSourceRegistry();
+      this.logToTerminal('info', 'Source registry loaded: No-Intro, Redump, TOSEC, MAME');
+    }
+  }
+
+  /**
+   * Render the source registry cards.
+   */
+  renderSourceRegistry() {
+    const grid = this.elements.pipelineGrid;
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    for (const [id, source] of this.sources) {
+      const card = this.createSourceCard(id, source);
+      grid.appendChild(card);
+    }
+  }
+
+  /**
+   * Create a source card element.
+   */
+  createSourceCard(id, source) {
+    const div = document.createElement('div');
+    div.className = 'glass-card rounded-2xl p-6 source-card';
+    div.id = `source-${id}`;
+
+    const statusColors = {
+      idle: 'text-white/40',
+      pending: 'text-yellow-400',
+      running: 'text-[#33afa9]',
+      completed: 'text-green-400',
+      error: 'text-[#f01532]',
+    };
+
+    div.innerHTML = `
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-bold tracking-tight">${source.name}</h3>
+          <p class="text-[11px] text-white/40 mt-1">${source.description || ''}</p>
+        </div>
+        <span class="text-[10px] font-mono uppercase tracking-wider ${statusColors[source.status] || 'text-white/40'}">
+          ${source.status}
+        </span>
+      </div>
+      <div class="w-full bg-white/5 rounded-full h-1.5 mb-4">
+        <div class="progress-fill bg-[#33afa9] h-1.5 rounded-full transition-all duration-500" style="width: ${source.progress || 0}%"></div>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] text-white/30 font-mono">${source.phase || 'Ready'}</span>
+        <button class="source-start-btn px-3 py-1.5 bg-[#33afa9]/10 border border-[#33afa9]/30 rounded text-[10px] font-bold uppercase tracking-wider text-[#33afa9] hover:bg-[#33afa9]/20 transition-all" data-source="${id}">
+          Start
+        </button>
+      </div>
+    `;
+
+    // Add start button handler
+    const startBtn = div.querySelector('.source-start-btn');
+    if (startBtn) {
+      startBtn.addEventListener('click', () => this.startSource(id));
+    }
+
+    return div;
+  }
+
+  /**
+   * Start a specific source.
+   */
+  async startSource(sourceId) {
+    try {
+      const response = await fetch('/api/pipeline/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        this.logToTerminal('info', `Started ${sourceId}`);
+      } else {
+        this.logToTerminal('error', data.error || `Failed to start ${sourceId}`);
+      }
+    } catch (error) {
+      this.logToTerminal('error', `Start ${sourceId} failed: ${error.message}`);
+    }
   }
 
   /**

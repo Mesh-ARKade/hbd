@@ -7,7 +7,9 @@
 import { MetadataStore } from "./storage/hyperbee.js";
 import { ok, err, Result, isErr } from "./core/result.js";
 import { loadIdentity, saveIdentity, KeystoreData } from "./identity/keyStore.js";
-import { generateMnemonic, deriveKeyPair } from "./identity/bip39.js";
+// BIP39 generation removed - now using GitHub Vault architecture
+import { VaultService, fetchWriterKey } from "./identity/vault.js";
+import { loadGitHubIdentity } from "./identity/github.js";
 import { Logger } from "pino";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -238,56 +240,91 @@ export async function handleSync(
   }
 }
 
+import { UnauthorizedError, OrgMembershipError, UnauthorizedCuratorError } from "./identity/errors.js";
+
 /**
- * Initialize a new HBD store with a BIP39 mnemonic.
+ * Initialize HBD store using GitHub Vault architecture.
+ * Fetches writer key from private Mesh-ARKade/hbd-writer-key repository.
  */
 export async function handleInit(
   store: MetadataStore,
   logger?: Logger,
-  options: { mnemonic?: string } = {}
-): Promise<Result<{ publicKey: string; mnemonic: string }, Error>> {
+  options: { githubToken?: string } = {}
+): Promise<Result<{ publicKey: string; username: string }, Error>> {
   try {
     if (logger) {
-      logger.info("Init command started");
+      logger.info("Init command started - using GitHub Vault");
     }
 
-    // 1. Get or generate mnemonic
-    let mnemonic = options.mnemonic;
-    if (!mnemonic) {
-      const genResult = await generateMnemonic(256); // 24 words
-      if (isErr(genResult)) return err(genResult.error);
-      mnemonic = genResult.value;
+    // Load GitHub identity
+    const githubUser = loadGitHubIdentity();
+    if (!githubUser) {
+      return err(new UnauthorizedError("GitHub authentication required. Run 'hbd auth github' first."));
     }
 
-    // 2. Derive keypair
-    const keyPairResult = await deriveKeyPair(mnemonic);
-    if (isErr(keyPairResult)) return err(keyPairResult.error);
-    const { publicKey } = keyPairResult.value;
-    const publicKeyHex = publicKey.toString("hex");
+    // Check for GitHub token
+    const token = options.githubToken || getCachedGitHubToken();
+    if (!token) {
+      return err(new UnauthorizedError("GitHub token not found. Please re-authenticate."));
+    }
 
-    // 3. Save to KeyStore
-    const saveResult = await saveIdentity(mnemonic, publicKeyHex, store.getDataDir());
+    // Fetch writer key from vault
+    const vault = new VaultService({
+      repoOwner: "Mesh-ARKade",
+      repoName: "hbd-writer-key",
+    });
+
+    const keyResult = await vault.getKeyWithCache(githubUser.login, token);
+    if (isErr(keyResult)) {
+      if (logger) {
+        logger.error({ error: keyResult.error.message }, "Failed to fetch writer key from vault");
+      }
+      return err(keyResult.error);
+    }
+
+    const writerKey = keyResult.value;
+
+    // Save to KeyStore (using publicKey as identifier, secretKey for operations)
+    const saveResult = await saveIdentity(writerKey.secretKey, writerKey.publicKey, store.getDataDir());
     if (isErr(saveResult)) return err(saveResult.error);
 
-    // 4. Open store with derived key
-    const result = await store.open(publicKeyHex);
+    // Open store with vault-fetched key
+    const result = await store.open(writerKey.publicKey, writerKey.secretKey);
     if (!result.ok) {
       if (logger) {
-        logger.error({ error: result.error.message }, "Init failed");
+        logger.error({ error: result.error.message }, "Init failed: store open error");
       }
       return err(result.error);
     }
 
     if (logger) {
-      logger.info({ publicKey: result.value }, "Init command completed");
+      logger.info({ publicKey: result.value, username: githubUser.login }, "Init completed with vault key");
     }
-    return ok({ publicKey: result.value, mnemonic });
+    return ok({ publicKey: result.value, username: githubUser.login });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     if (logger) {
       logger.error({ error: errMsg }, "Init command failed");
     }
     return err(new Error(errMsg));
+  }
+}
+
+/**
+ * Get cached GitHub access token
+ */
+function getCachedGitHubToken(): string | null {
+  try {
+    const configDir = path.join(process.env.HOME || process.env.USERPROFILE || ".", ".hbd");
+    const tokenPath = path.join(configDir, "github-token.json");
+    if (!fs.existsSync(tokenPath)) {
+      return null;
+    }
+    const content = fs.readFileSync(tokenPath, "utf8");
+    const data = JSON.parse(content);
+    return data.access_token || null;
+  } catch {
+    return null;
   }
 }
 
@@ -427,6 +464,17 @@ export async function handleScrape(
     
     const identityResult = await ensureIdentity(dataDir);
     if (isErr(identityResult)) return err(identityResult.error);
+
+    // ORG GUARD: Verify Mesh-ARKade organization membership
+    const { verifyOrgMembership } = await import("./identity/github.js");
+    const orgResult = await verifyOrgMembership("Mesh-ARKade");
+    
+    if (isErr(orgResult)) {
+      if (logger) {
+        logger.error({ error: orgResult.error.message }, "Org membership verification failed");
+      }
+      return err(new UnauthorizedError("Curator must be a member of the Mesh-ARKade organization."));
+    }
 
     // Check if dashboard is running on default port (3000)
     const { isDashboardRunning, sendScrapeRequest } = await import("./cli-proxy.js");

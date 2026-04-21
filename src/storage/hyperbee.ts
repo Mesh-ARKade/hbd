@@ -133,13 +133,13 @@ export class MetadataStore {
    * REQUIRES a public key. Random generation is forbidden.
    * @param publicKey - Hex string of the public key to use
    */
-  async open(publicKey?: string): Promise<Result<string, StorageOpenError>> {
+  async open(publicKey?: string, secretKey?: string): Promise<Result<string, StorageOpenError>> {
     try {
       if (this.opened) {
         return ok(this._publicKey);
       }
 
-      // Identity Guardrail: Forbid random generation
+      // Identity Guardrail: Vault key is REQUIRED
       if (!publicKey && !this._publicKey) {
         return err(
           new StorageOpenError(
@@ -148,16 +148,29 @@ export class MetadataStore {
         );
       }
 
+      // Vault Architecture: Secret key is required for write access
+      if (!secretKey) {
+        return err(
+          new StorageOpenError(
+            "UnauthorizedCurator: Vault key required. Please authenticate with GitHub and fetch your writer key."
+          )
+        );
+      }
+
       const keyToUse = publicKey || this._publicKey;
-      this.log("info", "Opening storage", { dataDir: this._dataDir, publicKey: keyToUse });
+      this.log("info", "Opening storage with vault key", { dataDir: this._dataDir, publicKey: keyToUse });
 
       // Ensure directory exists
       if (!fs.existsSync(this._dataDir)) {
         fs.mkdirSync(this._dataDir, { recursive: true });
       }
 
-      // Create Hypercore with file storage and explicit key
-      this.core = new Hypercore(this._dataDir, Buffer.from(keyToUse, "hex"));
+      // Create Hypercore with file storage and explicit key pair
+      const keyPair = {
+        publicKey: Buffer.from(keyToUse, "hex"),
+        secretKey: Buffer.from(secretKey, "hex"),
+      };
+      this.core = new Hypercore(this._dataDir, keyPair);
       await this.core.ready();
 
       // Verify the key matches
@@ -175,7 +188,7 @@ export class MetadataStore {
       this._publicKey = keyToUse;
       this.opened = true;
 
-      this.log("info", "Storage opened", { publicKey: this._publicKey });
+      this.log("info", "Storage opened with vault authentication", { publicKey: this._publicKey });
 
       return ok(this._publicKey);
     } catch (error) {

@@ -149,8 +149,7 @@ export class PipelineStatus extends EventEmitter {
       if (!this.sources.has(src.id)) {
         this.registerSourceInternal(src.id, {
           name: src.name,
-          description: src.description,
-          status: "idle"
+          description: src.description
         });
       }
     }

@@ -22,3 +22,10 @@ export class StorageOperationError extends Error {
     this.name = "StorageOperationError";
   }
 }
+
+export class UnauthorizedCuratorError extends Error {
+  constructor(message: string = "Curator not authorized to access vault.") {
+    super(message);
+    this.name = "UnauthorizedCuratorError";
+  }
+}

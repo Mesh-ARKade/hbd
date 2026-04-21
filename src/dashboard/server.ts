@@ -187,6 +187,68 @@ export class DashboardServer {
         message: `Max concurrent set to ${newMax}`,
       };
     });
+
+    // Get settings
+    this.app.get("/api/settings", async () => {
+      const { loadGitHubIdentity } = await import("../identity/github.js");
+      const githubUser = loadGitHubIdentity();
+
+      return {
+        mnemonic: null, // Never expose full mnemonic, only indicate if set
+        github: githubUser ? {
+          connected: true,
+          login: githubUser.login,
+          name: githubUser.name,
+        } : {
+          connected: false,
+        },
+      };
+    });
+
+    // Update settings
+    this.app.post("/api/settings", async (request, reply) => {
+      const body = request.body as { mnemonic?: string };
+
+      if (body.mnemonic) {
+        // Validate and save mnemonic
+        const { validateMnemonic } = await import("../identity/bip39.js");
+        const validResult = await validateMnemonic(body.mnemonic);
+
+        if (!validResult.ok || !validResult.value) {
+          return reply.code(400).send({ error: "Invalid mnemonic" });
+        }
+
+        // Save to keystore
+        const { saveIdentity } = await import("../identity/keyStore.js");
+        const { deriveKeyPair } = await import("../identity/bip39.js");
+        const keyPairResult = await deriveKeyPair(body.mnemonic);
+
+        if (!keyPairResult.ok) {
+          return reply.code(500).send({ error: "Failed to derive keys" });
+        }
+
+        const publicKeyHex = keyPairResult.value.publicKey.toString("hex");
+        const saveResult = await saveIdentity(body.mnemonic, publicKeyHex, this.dataDir);
+
+        if (!saveResult.ok) {
+          return reply.code(500).send({ error: "Failed to save identity" });
+        }
+      }
+
+      return { success: true };
+    });
+
+    // GitHub auth start
+    this.app.post("/api/auth/github/start", async (request, reply) => {
+      const { startDeviceFlow } = await import("../identity/github.js");
+      const result = await startDeviceFlow();
+
+      if (!result.ok) {
+        return reply.code(500).send({ error: result.error.message });
+      }
+
+      return result.value;
+    });
   }
 
   /**
