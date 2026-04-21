@@ -67,12 +67,14 @@ export class LogBridge {
           // Pino expects (obj: object, message: string) or (message: string)
           const obj = inputArgs[0];
           const msg = inputArgs[1] as string | undefined;
-          const rest = inputArgs.slice(2);
           
           if (typeof obj === "object" && obj !== null) {
+            const rest = inputArgs.slice(2);
             (method as (obj: object, msg: string, ...args: unknown[]) => void)
               .call(this.logger, obj, msg ?? "", ...rest);
           } else {
+            // First arg is the message string, preserve all following args
+            const rest = inputArgs.slice(1);
             (method as (msg: string, ...args: unknown[]) => void)
               .call(this.logger, obj as string, ...rest);
           }

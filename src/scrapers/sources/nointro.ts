@@ -111,7 +111,7 @@ export class NoIntroScraper extends AbstractScraper {
       this.logger.info({ url: this.targetUrl }, "Navigating to No-Intro daily page");
 
       // Navigate with retry
-      await retry(
+      const navResult = await retry(
         async () => {
           await this.page!.goto(this.targetUrl, {
             waitUntil: "domcontentloaded",
@@ -123,6 +123,10 @@ export class NoIntroScraper extends AbstractScraper {
           baseDelayMs: 2000,
         }
       );
+
+      if (!navResult.ok) {
+        return err(new Error(`Navigation failed after retries: ${navResult.error.message}`));
+      }
 
       this.logger.info("Page loaded, applying filters");
 
