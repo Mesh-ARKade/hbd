@@ -130,23 +130,40 @@ export class MetadataStore {
 
   /**
    * Open the store with file-based persistence.
+   * REQUIRES a public key. Random generation is forbidden.
+   * @param publicKey - Hex string of the public key to use
    */
-  async open(): Promise<Result<string, StorageOpenError>> {
+  async open(publicKey?: string): Promise<Result<string, StorageOpenError>> {
     try {
       if (this.opened) {
         return ok(this._publicKey);
       }
 
-      this.log("info", "Opening storage", { dataDir: this._dataDir });
+      // Identity Guardrail: Forbid random generation
+      if (!publicKey && !this._publicKey) {
+        return err(
+          new StorageOpenError(
+            "Identity not initialized. Please provide a public key or run 'hbd init' first."
+          )
+        );
+      }
+
+      const keyToUse = publicKey || this._publicKey;
+      this.log("info", "Opening storage", { dataDir: this._dataDir, publicKey: keyToUse });
 
       // Ensure directory exists
       if (!fs.existsSync(this._dataDir)) {
         fs.mkdirSync(this._dataDir, { recursive: true });
       }
 
-      // Create Hypercore with file storage
-      this.core = new Hypercore(this._dataDir);
+      // Create Hypercore with file storage and explicit key
+      this.core = new Hypercore(this._dataDir, Buffer.from(keyToUse, "hex"));
       await this.core.ready();
+
+      // Verify the key matches
+      if (this.core.key.toString("hex") !== keyToUse) {
+         return err(new StorageOpenError("Critical Identity Mismatch: Hypercore key does not match provided identity."));
+      }
 
       // Create Hyperbee on top of Hypercore
       this.bee = new Hyperbee(this.core, {
@@ -155,8 +172,7 @@ export class MetadataStore {
       });
       await this.bee.ready();
 
-      // Get the public key from Hypercore
-      this._publicKey = this.core.key.toString("hex");
+      this._publicKey = keyToUse;
       this.opened = true;
 
       this.log("info", "Storage opened", { publicKey: this._publicKey });

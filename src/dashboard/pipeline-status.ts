@@ -6,6 +6,12 @@
 
 import { EventEmitter } from "node:events";
 import { ok, err, Result } from "../core/result.js";
+import {
+  ConcurrencyManager,
+  JobStatus,
+  QueuedJob,
+  JobDefinition,
+} from "./concurrency-manager.js";
 
 /** Status values for a metadata source */
 export type SourceStatusValue = "idle" | "pending" | "running" | "completed" | "error" | "cancelled";
@@ -103,10 +109,26 @@ export class PipelineStatus extends EventEmitter {
   private sources: Map<string, SourceStatus> = new Map();
   private broadcast: ((state: PipelineState) => void) | null = null;
   private lastState: PipelineState | null = null;
+  private concurrencyManager: ConcurrencyManager;
+
+  /**
+   * Get the concurrency manager instance.
+   */
+  getConcurrencyManager(): ConcurrencyManager {
+    return this.concurrencyManager;
+  }
 
   constructor(options: PipelineStatusOptions = {}) {
     super();
     this.broadcast = options.broadcast ?? null;
+
+    // Initialize concurrency manager with state broadcasting
+    this.concurrencyManager = new ConcurrencyManager({
+      maxConcurrent: 1,
+      onJobStart: (job) => this.handleJobStart(job),
+      onJobComplete: (job) => this.handleJobComplete(job),
+      onJobFail: (job, error) => this.handleJobFail(job, error),
+    });
 
     // Register initial sources
     if (options.initialSources) {
@@ -114,6 +136,139 @@ export class PipelineStatus extends EventEmitter {
         this.registerSourceInternal(id, { name: id });
       }
     }
+
+    // Always ensure standard ARKive sources are registered
+    const standardSources = [
+      { id: "nointro", name: "No-Intro", description: "Standard Cartridge Source" },
+      { id: "redump", name: "Redump", description: "Optical Media Source" },
+      { id: "tosec", name: "TOSEC", description: "Legacy Computer Source" },
+      { id: "mame", name: "MAME", description: "Arcade/Software List Source" },
+    ];
+
+    for (const src of standardSources) {
+      if (!this.sources.has(src.id)) {
+        this.registerSourceInternal(src.id, {
+          name: src.name,
+          description: src.description,
+          status: "idle"
+        });
+      }
+    }
+  }
+
+  /**
+   * Handle job start from concurrency manager.
+   */
+  private handleJobStart(job: QueuedJob): void {
+    this.updateProgress(job.id, {
+      status: "running",
+      phase: "starting",
+      progress: 0,
+    });
+    // Update startedAt separately
+    const source = this.sources.get(job.id);
+    if (source) {
+      source.startedAt = Date.now();
+    }
+  }
+
+  /**
+   * Handle job completion from concurrency manager.
+   */
+  private handleJobComplete(job: QueuedJob): void {
+    this.updateProgress(job.id, {
+      status: "completed",
+      progress: 100,
+      phase: "complete",
+    });
+    // Update completedAt separately
+    const source = this.sources.get(job.id);
+    if (source) {
+      source.completedAt = Date.now();
+    }
+  }
+
+  /**
+   * Handle job failure from concurrency manager.
+   */
+  private handleJobFail(job: QueuedJob, error: Error): void {
+    this.fail(job.id, error.message);
+  }
+
+  /**
+   * Enqueue a source for scraping.
+   */
+  enqueueSource(id: string, name: string): Result<QueuedJob, Error> {
+    const source = this.sources.get(id);
+    if (!source) {
+      return err(new Error(`Source '${id}' not registered`));
+    }
+
+    // Update source status to pending
+    this.updateProgress(id, { status: "pending", progress: 0 });
+
+    // Enqueue the job
+    const job = this.concurrencyManager.enqueue({
+      id,
+      name,
+      sourceType: source.id,
+    });
+
+    return ok(job);
+  }
+
+  /**
+   * Start all registered sources.
+   */
+  runAll(): Result<QueuedJob[], Error> {
+    const sources: JobDefinition[] = [];
+
+    for (const [id, source] of this.sources) {
+      if (source.status === "idle" || source.status === "completed" || source.status === "error") {
+        sources.push({
+          id,
+          name: source.name,
+          sourceType: id,
+        });
+        // Update to pending
+        this.updateProgress(id, { status: "pending", progress: 0 });
+      }
+    }
+
+    const jobs = this.concurrencyManager.runAll(sources);
+    return ok(jobs);
+  }
+
+  /**
+   * Update max concurrent limit.
+   */
+  setMaxConcurrent(max: number): number {
+    this.concurrencyManager.setMaxConcurrent(max);
+    return this.concurrencyManager.getMaxConcurrent();
+  }
+
+  /**
+   * Get max concurrent limit.
+   */
+  getMaxConcurrent(): number {
+    return this.concurrencyManager.getMaxConcurrent();
+  }
+
+  /**
+   * Get queue status.
+   */
+  getQueueStatus(): {
+    jobs: QueuedJob[];
+    maxConcurrent: number;
+    runningCount: number;
+    pendingCount: number;
+  } {
+    return {
+      jobs: this.concurrencyManager.getAllJobs(),
+      maxConcurrent: this.concurrencyManager.getMaxConcurrent(),
+      runningCount: this.concurrencyManager.getRunningCount(),
+      pendingCount: this.concurrencyManager.getPendingCount(),
+    };
   }
 
   /**

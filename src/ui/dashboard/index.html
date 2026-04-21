@@ -169,6 +169,18 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        /* Source card button transition */
+        .source-btn {
+            background: rgba(51, 175, 169, 0.1);
+            border: 1px solid rgba(51, 175, 169, 0.2);
+            transition: all 0.3s ease;
+        }
+        .source-btn:hover {
+            background: rgba(51, 175, 169, 0.2);
+            border-color: var(--icon-teal);
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="selection:bg-[#33afa9] selection:text-black">
@@ -195,28 +207,41 @@
     <main class="max-w-6xl mx-auto pt-40 pb-32 px-6">
         
         <header class="mb-12">
-            <div class="flex items-center gap-4 mb-6">
-                <span class="status-tag">DAT Pipeline Orchestrator</span>
-                <span id="sync-status" class="text-[10px] font-mono text-[#c9f1f2] uppercase tracking-[0.2em] opacity-60">Status: Initializing</span>
-            </div>
-            <!-- Header lockup: Icon + Typography -->
-            <div class="flex items-center gap-8 mb-6">
-                <div class="w-24 md:w-32 flex-shrink-0 icon-glow">
-                    <img src="assets/ARKade.svg" alt="Mesh ARKade" class="w-full h-auto" />
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="status-tag">DAT Pipeline Orchestrator</span>
+                        <span id="sync-status" class="text-[10px] font-mono text-[#c9f1f2] uppercase tracking-[0.2em] opacity-60">Status: Initializing</span>
+                    </div>
+                    <!-- Header lockup: Icon + Typography -->
+                    <div class="flex items-center gap-8 mb-6">
+                        <div class="w-24 md:w-32 flex-shrink-0 icon-glow">
+                            <img src="assets/ARKade.svg" alt="Mesh ARKade" class="w-full h-auto" />
+                        </div>
+                        <h1 class="font-black tracking-tighter leading-[0.9]">
+                            <span class="font-['Outfit'] text-6xl md:text-8xl block">ARKive</span>
+                            <span class="font-['Press_Start_2P'] text-xl md:text-2xl block text-[#ff0013] mt-2">How 'Bout DAT!?</span>
+                        </h1>
+                    </div>
                 </div>
-                <h1 class="font-black tracking-tighter leading-[0.9]">
-                    <span class="font-['Outfit'] text-6xl md:text-8xl block">ARKive</span>
-                    <span class="font-['Press_Start_2P'] text-xl md:text-2xl block text-[#ff0013] mt-2">How 'Bout DAT!?</span>
-                </h1>
+
+                <!-- GitHub Curator Profile -->
+                <div id="curator-profile" class="hidden md:flex items-center gap-4 bg-white/5 border border-white/10 rounded-xl p-4">
+                    <div class="text-right">
+                        <p class="text-[10px] text-white/40 font-mono uppercase tracking-widest">Curator Active</p>
+                        <p id="github-username" class="text-xs font-bold text-[#c9f1f2]">Loading...</p>
+                    </div>
+                    <img id="github-avatar" src="" alt="" class="w-10 h-10 rounded-lg border border-white/20 bg-black/50" />
+                </div>
             </div>
             <p class="text-[#fcfdfa]/50 text-xl font-['Outfit'] max-w-2xl font-light tracking-wide leading-relaxed">
                 Aggregating and normalizing structural DAT files across configured preservation sources.
             </p>
         </header>
 
-        <!-- Overall Progress -->
-        <section class="mb-8">
-            <div class="glass-card p-6 rounded-xl">
+        <!-- Orchestration Control & Overall Progress -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="glass-card p-6 rounded-xl md:col-span-2">
                 <div class="flex justify-between items-center mb-4">
                     <span class="text-xs uppercase tracking-widest text-[#fcfdfa]/60">Overall Progress</span>
                     <span id="overall-percent" class="text-2xl font-bold text-[#33afa9]">0%</span>
@@ -230,27 +255,43 @@
                     <span id="error-sources">0 Errors</span>
                 </div>
             </div>
+
+            <!-- New Orchestration Panel -->
+            <div class="glass-card p-6 rounded-xl flex flex-col justify-between border-[#33afa9]/30">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-[10px] font-bold text-[#c9f1f2] uppercase tracking-[0.2em]">Orchestration</span>
+                    <div class="flex items-center gap-2">
+                        <label class="text-[9px] text-white/40 font-mono uppercase">Max Parallel</label>
+                        <select id="max-parallel" class="bg-[#0e3754]/50 border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-[#c9f1f2] font-mono focus:outline-none">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="run-all-btn" class="w-full py-3 bg-[#33afa9]/20 border border-[#33afa9]/50 rounded text-[11px] font-black uppercase tracking-[0.2em] text-[#33afa9] hover:bg-[#33afa9]/30 transition-all flex items-center justify-center gap-2">
+                    Run Entire Pipeline
+                </button>
+            </div>
         </section>
 
         <!-- Pipeline Grid -->
         <section id="pipeline-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Source cards will be dynamically generated -->
-            <div class="glass-card p-10 flex items-center justify-center min-h-[200px] rounded-2xl opacity-50">
-                <span class="text-[#fcfdfa]/30 text-sm uppercase tracking-widest">Waiting for sources...</span>
-            </div>
+            <!-- Source cards will be dynamically generated from Source Registry -->
         </section>
 
         <!-- Live Terminal -->
         <section class="mt-12">
             <div class="flex items-center justify-between mb-4">
-                <span class="text-xs uppercase tracking-widest text-[#fcfdfa]/60">Live Terminal</span>
+                <span class="text-xs uppercase tracking-widest text-[#fcfdfa]/60">Live Terminal Output</span>
                 <div class="flex gap-2">
                     <button id="clear-terminal" class="px-3 py-1 text-[10px] uppercase tracking-widest bg-[#33afa9]/10 border border-[#33afa9]/30 rounded text-[#33afa9] hover:bg-[#33afa9]/20 transition-colors">Clear</button>
                     <button id="pause-terminal" class="px-3 py-1 text-[10px] uppercase tracking-widest bg-[#fcfdfa]/5 border border-[#fcfdfa]/20 rounded text-[#fcfdfa]/60 hover:bg-[#fcfdfa]/10 transition-colors">Pause</button>
                 </div>
             </div>
-            <div id="terminal" class="terminal rounded-lg p-4 h-64 overflow-y-auto">
-                <div class="text-[#fcfdfa]/30 text-xs italic">Waiting for connection...</div>
+            <div id="terminal" class="terminal rounded-lg p-4 h-64 overflow-y-auto scanlines relative">
+                <div class="text-[#fcfdfa]/30 text-xs italic">Awaiting connection to swarm...</div>
             </div>
         </section>
 

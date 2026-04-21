@@ -4,6 +4,9 @@
  * @packageDocumentation
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { getConfigDir } from "./keyStore.js";
 import { ok, err, Result } from "../core/result.js";
 import { GitHubConfigError, GitHubAuthError, GitHubNetworkError } from "./errors.js";
 
@@ -31,6 +34,7 @@ export interface TokenResponse {
 export interface GitHubUser {
   login: string;
   id: number;
+  avatar_url?: string;
   name: string | null;
 }
 
@@ -146,9 +150,45 @@ export async function fetchGitHubUser(accessToken: string, config?: GitHubConfig
     }
 
     const user = await response.json();
+    
+    // Save identity for dashboard/CLI persistence
+    saveGitHubIdentity(user);
+    
     return ok(user);
   } catch (error) {
     return err(new GitHubNetworkError(error instanceof Error ? error.message : String(error)));
+  }
+}
+
+/**
+ * Save GitHub user profile to local cache.
+ */
+export function saveGitHubIdentity(user: GitHubUser): void {
+  try {
+    const configDir = getConfigDir();
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    const cachePath = path.join(configDir, "github-identity.json");
+    fs.writeFileSync(cachePath, JSON.stringify(user, null, 2), "utf8");
+  } catch (error) {
+    console.error("Failed to save GitHub identity:", error);
+  }
+}
+
+/**
+ * Load GitHub user profile from local cache.
+ */
+export function loadGitHubIdentity(): GitHubUser | null {
+  try {
+    const cachePath = path.join(getConfigDir(), "github-identity.json");
+    if (!fs.existsSync(cachePath)) {
+      return null;
+    }
+    const content = fs.readFileSync(cachePath, "utf8");
+    return JSON.parse(content) as GitHubUser;
+  } catch (error) {
+    return null;
   }
 }
 

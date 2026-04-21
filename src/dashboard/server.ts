@@ -16,6 +16,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { createLogger } from "../core/logger.js";
 import type { Logger } from "pino";
+import { PipelineStatus } from "./pipeline-status.js";
+import { loadGitHubIdentity } from "../identity/github.js";
+import { loadIdentity } from "../identity/keyStore.js";
+import { isOk } from "../core/result.js";
 
 export interface DashboardServerOptions {
   /** Data directory path */
@@ -26,6 +30,8 @@ export interface DashboardServerOptions {
   host?: string;
   /** Logger instance */
   logger?: Logger;
+  /** Pipeline status manager */
+  pipeline?: PipelineStatus;
 }
 
 /**
@@ -40,6 +46,7 @@ export class DashboardServer {
   private logger: Logger;
   private running: boolean = false;
   private actualPort?: number;
+  private pipeline?: PipelineStatus;
 
   constructor(options: DashboardServerOptions) {
     this.port = options.port ?? 3000;
@@ -47,6 +54,7 @@ export class DashboardServer {
     this.dataDir = options.dataDir;
     this.logger =
       options.logger ?? createLogger({ system: "dashboard", level: "info" });
+    this.pipeline = options.pipeline;
 
     this.app = Fastify({
       logger: false, // We use our own logger
@@ -78,11 +86,9 @@ export class DashboardServer {
         if (entry.isDirectory()) {
           copyRecursive(srcPath, destPath);
         } else {
-          // Only copy if file doesn't exist or is different
-          if (!fs.existsSync(destPath)) {
-            fs.copyFileSync(srcPath, destPath);
-            this.logger.debug({ file: entry.name }, "Copied UI file");
-          }
+          // Force overwrite to ensure UI updates are reflected
+          fs.copyFileSync(srcPath, destPath);
+          this.logger.debug({ file: entry.name }, "Updated UI file");
         }
       }
     };
@@ -101,6 +107,85 @@ export class DashboardServer {
     // Health check endpoint
     this.app.get("/health", async () => {
       return { status: "ok", timestamp: Date.now() };
+    });
+
+    // Identity endpoint
+    this.app.get("/api/identity", async () => {
+      const githubIdentity = loadGitHubIdentity();
+      const p2pIdentityResult = await loadIdentity(this.dataDir);
+
+      return {
+        github: githubIdentity,
+        p2p: isOk(p2pIdentityResult) ? p2pIdentityResult.value : null,
+      };
+    });
+
+    // Pipeline queue status
+    this.app.get("/api/pipeline/queue", async () => {
+      if (!this.pipeline) {
+        return { error: "Pipeline not initialized" };
+      }
+      return this.pipeline.getQueueStatus();
+    });
+
+    // Start a source or all sources
+    this.app.post("/api/pipeline/start", async (request, reply) => {
+      if (!this.pipeline) {
+        return reply.code(503).send({ error: "Pipeline not initialized" });
+      }
+
+      const body = request.body as { sourceId?: string };
+      if (!body.sourceId) {
+        return reply.code(400).send({ error: "sourceId is required" });
+      }
+
+      if (body.sourceId === "all") {
+        const result = this.pipeline.runAll();
+        if (result.ok) {
+          return {
+            success: true,
+            message: `Started ${result.value.length} sources`,
+            started: result.value.length,
+          };
+        } else {
+          return reply.code(500).send({ error: result.error.message });
+        }
+      } else {
+        const source = this.pipeline.getSourceState(body.sourceId);
+        if (!source) {
+          return reply.code(404).send({ error: `Source '${body.sourceId}' not found` });
+        }
+        const result = this.pipeline.enqueueSource(body.sourceId, source.name);
+        if (result.ok) {
+          return {
+            success: true,
+            message: `Source '${body.sourceId}' queued`,
+            jobId: result.value.id,
+            status: result.value.status,
+          };
+        } else {
+          return reply.code(400).send({ error: result.error.message });
+        }
+      }
+    });
+
+    // Update pipeline config
+    this.app.post("/api/pipeline/config", async (request, reply) => {
+      if (!this.pipeline) {
+        return reply.code(503).send({ error: "Pipeline not initialized" });
+      }
+
+      const body = request.body as { maxConcurrent?: number };
+      if (typeof body.maxConcurrent !== "number") {
+        return reply.code(400).send({ error: "maxConcurrent is required" });
+      }
+
+      const newMax = this.pipeline.setMaxConcurrent(body.maxConcurrent);
+      return {
+        success: true,
+        maxConcurrent: newMax,
+        message: `Max concurrent set to ${newMax}`,
+      };
     });
   }
 

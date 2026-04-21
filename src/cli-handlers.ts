@@ -1,14 +1,30 @@
 /**
  * CLI command handlers for HBD commands.
- * Refactored to use Result pattern and Pino logging.
+ * Refactored to enforce Identity-First flow (BIP39 -> KeyStore -> MetadataStore).
  * @packageDocumentation
  */
 
 import { MetadataStore } from "./storage/hyperbee.js";
-import { ok, err, Result } from "./core/result.js";
+import { ok, err, Result, isErr } from "./core/result.js";
+import { loadIdentity, saveIdentity, KeystoreData } from "./identity/keyStore.js";
+import { generateMnemonic, deriveKeyPair } from "./identity/bip39.js";
 import { Logger } from "pino";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+/**
+ * Helper to ensure identity is loaded before store operation.
+ */
+async function ensureIdentity(dataDir: string): Promise<Result<KeystoreData, Error>> {
+  const identityResult = await loadIdentity(dataDir);
+  if (isErr(identityResult)) return err(identityResult.error);
+  
+  if (!identityResult.value) {
+    return err(new Error("Identity not initialized. Please provide a public key or run 'hbd init' first."));
+  }
+  
+  return ok(identityResult.value);
+}
 
 /**
  * Add a ROM to the catalog.
@@ -24,7 +40,10 @@ export async function handleAdd(
       logger.info({ key }, "Add command started");
     }
     
-    const openResult = await store.open();
+    const identityResult = await ensureIdentity(store.getDataDir());
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    const openResult = await store.open(identityResult.value.publicKey);
     if (!openResult.ok) {
       if (logger) {
         logger.error({ key, error: openResult.error.message }, "Add failed: store open error");
@@ -65,7 +84,10 @@ export async function handleScan(
       logger.info("Scan command started");
     }
     
-    const openResult = await store.open();
+    const identityResult = await ensureIdentity(store.getDataDir());
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    const openResult = await store.open(identityResult.value.publicKey);
     if (!openResult.ok) {
       if (logger) {
         logger.error({ error: openResult.error.message }, "Scan failed: store open error");
@@ -104,7 +126,10 @@ export async function handleList(
       logger.info({ system }, "List command started");
     }
     
-    const openResult = await store.open();
+    const identityResult = await ensureIdentity(store.getDataDir());
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    const openResult = await store.open(identityResult.value.publicKey);
     if (!openResult.ok) {
       if (logger) {
         logger.error({ system, error: openResult.error.message }, "List failed: store open error");
@@ -146,7 +171,10 @@ export async function handleInfo(
       logger.info({ key }, "Info command started");
     }
     
-    const openResult = await store.open();
+    const identityResult = await ensureIdentity(store.getDataDir());
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    const openResult = await store.open(identityResult.value.publicKey);
     if (!openResult.ok) {
       if (logger) {
         logger.error({ key, error: openResult.error.message }, "Info failed: store open error");
@@ -181,7 +209,10 @@ export async function handleSync(
       logger.info("Sync command started");
     }
     
-    const openResult = await store.open();
+    const identityResult = await ensureIdentity(store.getDataDir());
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    const openResult = await store.open(identityResult.value.publicKey);
     if (!openResult.ok) {
       if (logger) {
         logger.error({ error: openResult.error.message }, "Sync failed: store open error");
@@ -208,18 +239,38 @@ export async function handleSync(
 }
 
 /**
- * Initialize a new HBD store.
+ * Initialize a new HBD store with a BIP39 mnemonic.
  */
 export async function handleInit(
   store: MetadataStore,
-  logger?: Logger
-): Promise<Result<{ publicKey: string }, Error>> {
+  logger?: Logger,
+  options: { mnemonic?: string } = {}
+): Promise<Result<{ publicKey: string; mnemonic: string }, Error>> {
   try {
     if (logger) {
       logger.info("Init command started");
     }
-    
-    const result = await store.open();
+
+    // 1. Get or generate mnemonic
+    let mnemonic = options.mnemonic;
+    if (!mnemonic) {
+      const genResult = await generateMnemonic(256); // 24 words
+      if (isErr(genResult)) return err(genResult.error);
+      mnemonic = genResult.value;
+    }
+
+    // 2. Derive keypair
+    const keyPairResult = await deriveKeyPair(mnemonic);
+    if (isErr(keyPairResult)) return err(keyPairResult.error);
+    const { publicKey } = keyPairResult.value;
+    const publicKeyHex = publicKey.toString("hex");
+
+    // 3. Save to KeyStore
+    const saveResult = await saveIdentity(mnemonic, publicKeyHex, store.getDataDir());
+    if (isErr(saveResult)) return err(saveResult.error);
+
+    // 4. Open store with derived key
+    const result = await store.open(publicKeyHex);
     if (!result.ok) {
       if (logger) {
         logger.error({ error: result.error.message }, "Init failed");
@@ -230,7 +281,7 @@ export async function handleInit(
     if (logger) {
       logger.info({ publicKey: result.value }, "Init command completed");
     }
-    return ok({ publicKey: result.value });
+    return ok({ publicKey: result.value, mnemonic });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     if (logger) {
@@ -352,6 +403,7 @@ export interface ScrapeOptions {
 
 /**
  * Scrape metadata from No-Intro.
+ * If dashboard is running, sends request to the API instead of running locally.
  */
 export async function handleScrape(
   options: ScrapeOptions,
@@ -371,6 +423,38 @@ export async function handleScrape(
         logger.error({ dataDir, error: error.message }, "Scrape failed: directory not found");
       }
       return err(error);
+    }
+    
+    const identityResult = await ensureIdentity(dataDir);
+    if (isErr(identityResult)) return err(identityResult.error);
+
+    // Check if dashboard is running on default port (3000)
+    const { isDashboardRunning, sendScrapeRequest } = await import("./cli-proxy.js");
+    const dashboardRunning = await isDashboardRunning(3000);
+
+    if (dashboardRunning) {
+      if (logger) {
+        logger.info("Dashboard detected, using queue API");
+      }
+
+      // Use dashboard API
+      const sourceId = options.system || "all";
+      const result = await sendScrapeRequest(sourceId, 3000);
+
+      if (result.ok) {
+        if (logger) {
+          logger.info({ message: result.value.message }, "Scrape queued via dashboard");
+        }
+        return ok({
+          success: true,
+          recordsProcessed: 0, // Will be processed by dashboard
+        });
+      } else {
+        if (logger) {
+          logger.error({ error: result.error.message }, "Dashboard API failed");
+        }
+        return err(result.error);
+      }
     }
 
     // Parse systems if provided
