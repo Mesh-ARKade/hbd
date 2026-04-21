@@ -63,8 +63,21 @@ export class LogBridge {
       timestamp: pino.stdTimeFunctions.epochTime,
       hooks: {
         logMethod: (inputArgs, method, level) => {
-          // Call original method
-          method.apply(this.logger, inputArgs as [string, ...unknown[]]);
+          // Call original method with proper context
+          // Pino expects (obj: object, message: string) or (message: string)
+          const obj = inputArgs[0];
+          const msg = inputArgs[1] as string | undefined;
+          
+          if (typeof obj === "object" && obj !== null) {
+            const rest = inputArgs.slice(2);
+            (method as (obj: object, msg: string, ...args: unknown[]) => void)
+              .call(this.logger, obj, msg ?? "", ...rest);
+          } else {
+            // First arg is the message string, preserve all following args
+            const rest = inputArgs.slice(1);
+            (method as (msg: string, ...args: unknown[]) => void)
+              .call(this.logger, obj as string, ...rest);
+          }
 
           // Broadcast if level meets minimum
           if (level >= this.minLevel) {

@@ -6,7 +6,7 @@
 
 import { generateMnemonic as bip39Generate, validateMnemonic as bip39Validate, mnemonicToSeedSync } from "bip39";
 import { createHash } from "node:crypto";
-import { ok, err, Result } from "../core/result";
+import { ok, err, Result } from "../core/result.js";
 
 /**
  * Custom error classes for BIP39 operations

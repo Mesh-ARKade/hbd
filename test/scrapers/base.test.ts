@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi, describe as d } from "vitest";
 import { AbstractScraper, ScraperPhase, ScraperOptions } from "../../src/scrapers/base.js";
-import { isOk, isErr, Result } from "../../src/core/result.js";
+import { ok, err, isOk, isErr, Result } from "../../src/core/result.js";
 import { getUniqueTestDir, robustRm } from "../test-utils.js";
 import * as fs from "node:fs";
 
@@ -16,74 +16,80 @@ class TestScraper extends AbstractScraper {
   public decompressCalled = false;
   public parseCalled = false;
 
-  async fetch(): Promise<void> {
+  async fetch(): Promise<Result<void, Error>> {
     this.fetchCalled = true;
     this.setPhase("fetch");
+    return ok(void 0);
   }
 
-  async download(): Promise<void> {
+  async download(): Promise<Result<void, Error>> {
     this.downloadCalled = true;
     this.setPhase("download");
+    return ok(void 0);
   }
 
-  async decompress(): Promise<void> {
+  async decompress(): Promise<Result<void, Error>> {
     this.decompressCalled = true;
     this.setPhase("decompress");
+    return ok(void 0);
   }
 
-  async parse(): Promise<void> {
+  async parse(): Promise<Result<void, Error>> {
     this.parseCalled = true;
     this.setPhase("parse");
+    return ok(void 0);
   }
 
-  async merge(): Promise<void> {
+  async merge(): Promise<Result<void, Error>> {
     this.setPhase("merge");
+    return ok(void 0);
   }
 
-  async write(): Promise<void> {
+  async write(): Promise<Result<void, Error>> {
     this.setPhase("write");
+    return ok(void 0);
   }
 }
 
-// Scraper that throws in fetch
+// Scraper that returns error in fetch
 class FetchErrorScraper extends TestScraper {
-  async fetch(): Promise<void> {
-    throw new Error("Network error");
+  async fetch(): Promise<Result<void, Error>> {
+    return err(new Error("Network error"));
   }
 }
 
-// Scraper that throws in download
+// Scraper that returns error in download
 class DownloadErrorScraper extends TestScraper {
-  async download(): Promise<void> {
-    throw new Error("Download failed");
+  async download(): Promise<Result<void, Error>> {
+    return err(new Error("Download failed"));
   }
 }
 
-// Scraper that throws in decompress
+// Scraper that returns error in decompress
 class DecompressErrorScraper extends TestScraper {
-  async decompress(): Promise<void> {
-    throw new Error("Decompress failed");
+  async decompress(): Promise<Result<void, Error>> {
+    return err(new Error("Decompress failed"));
   }
 }
 
-// Scraper that throws in merge
+// Scraper that returns error in merge
 class MergeErrorScraper extends TestScraper {
-  async merge(): Promise<void> {
-    throw new Error("Merge failed");
+  async merge(): Promise<Result<void, Error>> {
+    return err(new Error("Merge failed"));
   }
 }
 
-// Scraper that throws in write
+// Scraper that returns error in write
 class WriteErrorScraper extends TestScraper {
-  async write(): Promise<void> {
-    throw new Error("Write failed");
+  async write(): Promise<Result<void, Error>> {
+    return err(new Error("Write failed"));
   }
 }
 
-// Scraper with string error
+// Scraper with string error (converted to Error)
 class StringErrorScraper extends TestScraper {
-  async fetch(): Promise<void> {
-    throw "String error";
+  async fetch(): Promise<Result<void, Error>> {
+    return err(new Error("String error"));
   }
 }
 
@@ -343,9 +349,10 @@ describe("AbstractScraper", () => {
 
     it("should set cancelled phase when cancelled during run", async () => {
       class SlowScraper extends TestScraper {
-        async fetch(): Promise<void> {
+        async fetch(): Promise<Result<void, Error>> {
           this.setPhase("fetch");
           await new Promise(r => setTimeout(r, 50));
+          return ok(void 0);
         }
       }
 
@@ -371,6 +378,77 @@ describe("AbstractScraper", () => {
     it("should return false initially", () => {
       // Access internal state
       expect(scraper.getPhase()).not.toBe("cancelled");
+    });
+  });
+
+  describe("run() safety net", () => {
+    it("should convert an unexpected throw from a lifecycle method into err()", async () => {
+      class ThrowingScraper extends TestScraper {
+        async parse(): Promise<Result<void, Error>> {
+          // Simulates a sync fs error (e.g. readdirSync EACCES) bubbling out
+          throw new Error("fs permission denied");
+        }
+      }
+
+      const throwing = new ThrowingScraper({
+        dataDir: testDir,
+        logger: mockLogger,
+        pipeline: mockPipeline,
+      });
+
+      const result = await throwing.run();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toContain("fs permission denied");
+      }
+      expect(throwing.getPhase()).toBe("error");
+    });
+
+    it("should return cancelled err when a lifecycle throws after cancel()", async () => {
+      class ThrowAfterCancelScraper extends TestScraper {
+        async fetch(): Promise<Result<void, Error>> {
+          this.cancel();
+          // Legacy subclasses may still use checkCancelled(), which throws
+          (this as unknown as { checkCancelled: () => void }).checkCancelled();
+          return ok(void 0);
+        }
+      }
+
+      const s = new ThrowAfterCancelScraper({
+        dataDir: testDir,
+        logger: mockLogger,
+        pipeline: mockPipeline,
+      });
+
+      const result = await s.run();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toBe("Scraper cancelled");
+      }
+      expect(s.getPhase()).toBe("cancelled");
+    });
+  });
+
+  describe("checkCancelledResult", () => {
+    it("should return ok when not cancelled", () => {
+      const result = (scraper as unknown as {
+        checkCancelledResult: () => Result<void, Error>;
+      }).checkCancelledResult();
+      expect(isOk(result)).toBe(true);
+    });
+
+    it("should return err and set cancelled phase when cancelled", () => {
+      scraper.cancel();
+      const result = (scraper as unknown as {
+        checkCancelledResult: () => Result<void, Error>;
+      }).checkCancelledResult();
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toBe("Scraper cancelled");
+      }
+      expect(scraper.getPhase()).toBe("cancelled");
     });
   });
 });

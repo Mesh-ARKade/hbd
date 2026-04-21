@@ -96,21 +96,22 @@ export class NoIntroScraper extends AbstractScraper {
 
   /**
    * Fetch - Navigate to No-Intro and click download button
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async fetch(): Promise<void> {
+  async fetch(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Fetch);
 
     try {
       await this.initBrowser();
 
       if (!this.page) {
-        throw new Error("Failed to initialize page");
+        return err(new Error("Failed to initialize page"));
       }
 
       this.logger.info({ url: this.targetUrl }, "Navigating to No-Intro daily page");
 
       // Navigate with retry
-      await retry(
+      const navResult = await retry(
         async () => {
           await this.page!.goto(this.targetUrl, {
             waitUntil: "domcontentloaded",
@@ -122,6 +123,10 @@ export class NoIntroScraper extends AbstractScraper {
           baseDelayMs: 2000,
         }
       );
+
+      if (!navResult.ok) {
+        return err(new Error(`Navigation failed after retries: ${navResult.error.message}`));
+      }
 
       this.logger.info("Page loaded, applying filters");
 
@@ -145,7 +150,7 @@ export class NoIntroScraper extends AbstractScraper {
       } catch (e) {
         // Take screenshot on timeout
         await this.saveErrorScreenshot("download-timeout");
-        throw new Error("Download button did not appear within timeout");
+        return err(new Error("Download button did not appear within timeout"));
       }
 
       // Start download
@@ -157,6 +162,7 @@ export class NoIntroScraper extends AbstractScraper {
       await downloadButton.click();
 
       this.logger.info("Download initiated");
+      return ok(void 0);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -165,7 +171,7 @@ export class NoIntroScraper extends AbstractScraper {
         await this.saveErrorScreenshot("fetch-error");
       }
 
-      throw new Error(`Fetch failed: ${errorMessage}`);
+      return err(new Error(`Fetch failed: ${errorMessage}`));
     }
   }
 
@@ -198,8 +204,9 @@ export class NoIntroScraper extends AbstractScraper {
   /**
    * Download - This is called after fetch triggers the download
    * In a real implementation, we'd wait for the download event
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async download(): Promise<void> {
+  async download(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Download);
 
     // For testing purposes, we just verify we're in the right state
@@ -209,6 +216,8 @@ export class NoIntroScraper extends AbstractScraper {
     // In a real implementation:
     // - Listen for page.download event
     // - Save the downloaded file
+
+    return ok(void 0);
   }
 
   /**
@@ -236,8 +245,9 @@ export class NoIntroScraper extends AbstractScraper {
   /**
    * Decompress a downloaded archive
    * @param zipPath - Optional path to zip file. If not provided, uses default download path.
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async decompress(zipPath?: string): Promise<Result<string, Error>> {
+  async decompress(zipPath?: string): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Decompress);
 
     try {
@@ -263,7 +273,7 @@ export class NoIntroScraper extends AbstractScraper {
       this.logger.info({ zipPath: resolvedPath, extractDir }, "Extracting archive");
       zip.extractAllTo(extractDir, true);
 
-      return ok(extractDir);
+      return ok(void 0);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error({ error: errorMessage }, "Decompress failed");
@@ -273,27 +283,35 @@ export class NoIntroScraper extends AbstractScraper {
 
   /**
    * Parse - Determine the extracted DAT file
+   * @returns Result<void, Error> - ok() on success, err() on failure
    */
-  async parse(): Promise<void> {
+  async parse(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Parse);
 
-    // Look for DAT files in extracted directory
-    const extractedDir = this.findExtractedDir();
+    try {
+      // Look for DAT files in extracted directory
+      const extractedDir = this.findExtractedDir();
 
-    if (!extractedDir) {
-      throw new Error("No extracted directory found");
+      if (!extractedDir) {
+        return err(new Error("No extracted directory found"));
+      }
+
+      // Find DAT files
+      const datFiles = this.findDatFiles(extractedDir);
+
+      if (datFiles.length === 0) {
+        return err(new Error("No DAT files found in extracted archive"));
+      }
+
+      this.logger.info({ files: datFiles }, "Found DAT files");
+
+      // In a real implementation, these would be passed to the ClrMameProParser
+      return ok(void 0);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error({ error: errorMessage }, "Parse failed");
+      return err(new Error(`Parse failed: ${errorMessage}`));
     }
-
-    // Find DAT files
-    const datFiles = this.findDatFiles(extractedDir);
-
-    if (datFiles.length === 0) {
-      throw new Error("No DAT files found in extracted archive");
-    }
-
-    this.logger.info({ files: datFiles }, "Found DAT files");
-
-    // In a real implementation, these would be passed to the ClrMameProParser
   }
 
   /**

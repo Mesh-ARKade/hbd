@@ -9,6 +9,11 @@ import fastifyStatic from "@fastify/static";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { createLogger } from "../core/logger.js";
 import type { Logger } from "pino";
 
