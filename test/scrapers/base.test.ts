@@ -380,6 +380,77 @@ describe("AbstractScraper", () => {
       expect(scraper.getPhase()).not.toBe("cancelled");
     });
   });
+
+  describe("run() safety net", () => {
+    it("should convert an unexpected throw from a lifecycle method into err()", async () => {
+      class ThrowingScraper extends TestScraper {
+        async parse(): Promise<Result<void, Error>> {
+          // Simulates a sync fs error (e.g. readdirSync EACCES) bubbling out
+          throw new Error("fs permission denied");
+        }
+      }
+
+      const throwing = new ThrowingScraper({
+        dataDir: testDir,
+        logger: mockLogger,
+        pipeline: mockPipeline,
+      });
+
+      const result = await throwing.run();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toContain("fs permission denied");
+      }
+      expect(throwing.getPhase()).toBe("error");
+    });
+
+    it("should return cancelled err when a lifecycle throws after cancel()", async () => {
+      class ThrowAfterCancelScraper extends TestScraper {
+        async fetch(): Promise<Result<void, Error>> {
+          this.cancel();
+          // Legacy subclasses may still use checkCancelled(), which throws
+          (this as unknown as { checkCancelled: () => void }).checkCancelled();
+          return ok(void 0);
+        }
+      }
+
+      const s = new ThrowAfterCancelScraper({
+        dataDir: testDir,
+        logger: mockLogger,
+        pipeline: mockPipeline,
+      });
+
+      const result = await s.run();
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toBe("Scraper cancelled");
+      }
+      expect(s.getPhase()).toBe("cancelled");
+    });
+  });
+
+  describe("checkCancelledResult", () => {
+    it("should return ok when not cancelled", () => {
+      const result = (scraper as unknown as {
+        checkCancelledResult: () => Result<void, Error>;
+      }).checkCancelledResult();
+      expect(isOk(result)).toBe(true);
+    });
+
+    it("should return err and set cancelled phase when cancelled", () => {
+      scraper.cancel();
+      const result = (scraper as unknown as {
+        checkCancelledResult: () => Result<void, Error>;
+      }).checkCancelledResult();
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error.message).toBe("Scraper cancelled");
+      }
+      expect(scraper.getPhase()).toBe("cancelled");
+    });
+  });
 });
 
 describe("ScraperPhase enum", () => {

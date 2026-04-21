@@ -288,24 +288,30 @@ export class NoIntroScraper extends AbstractScraper {
   async parse(): Promise<Result<void, Error>> {
     this.setPhase(ScraperPhase.Parse);
 
-    // Look for DAT files in extracted directory
-    const extractedDir = this.findExtractedDir();
+    try {
+      // Look for DAT files in extracted directory
+      const extractedDir = this.findExtractedDir();
 
-    if (!extractedDir) {
-      return err(new Error("No extracted directory found"));
+      if (!extractedDir) {
+        return err(new Error("No extracted directory found"));
+      }
+
+      // Find DAT files
+      const datFiles = this.findDatFiles(extractedDir);
+
+      if (datFiles.length === 0) {
+        return err(new Error("No DAT files found in extracted archive"));
+      }
+
+      this.logger.info({ files: datFiles }, "Found DAT files");
+
+      // In a real implementation, these would be passed to the ClrMameProParser
+      return ok(void 0);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error({ error: errorMessage }, "Parse failed");
+      return err(new Error(`Parse failed: ${errorMessage}`));
     }
-
-    // Find DAT files
-    const datFiles = this.findDatFiles(extractedDir);
-
-    if (datFiles.length === 0) {
-      return err(new Error("No DAT files found in extracted archive"));
-    }
-
-    this.logger.info({ files: datFiles }, "Found DAT files");
-
-    // In a real implementation, these would be passed to the ClrMameProParser
-    return ok(void 0);
   }
 
   /**

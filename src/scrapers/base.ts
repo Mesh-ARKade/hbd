@@ -131,12 +131,36 @@ export abstract class AbstractScraper {
 
   /**
    * Check and throw if cancelled.
+   *
+   * @deprecated Throws an exception, which violates the Result<T, E> contract
+   * used by the lifecycle methods. Subclasses MUST NOT call this inside
+   * `fetch()`, `download()`, `decompress()`, `parse()`, `merge()`, or `write()`.
+   * Prefer the Result-based {@link checkCancelledResult} or inline
+   * `if (this.isCancelled())` checks that return `err(...)`.
+   *
+   * Retained for backwards compatibility with older subclasses. The `run()`
+   * orchestrator has a safety-net try/catch that will convert any throw from
+   * this method into an `err()` Result, but relying on that behaviour is
+   * discouraged.
    */
   protected checkCancelled(): void {
     if (this.cancelled) {
       this.setPhase(ScraperPhase.Cancelled);
       throw new Error("Scraper cancelled");
     }
+  }
+
+  /**
+   * Result-pattern counterpart to {@link checkCancelled}.
+   * Returns `err(...)` if the scraper has been cancelled, `ok()` otherwise.
+   * Sets the phase to Cancelled as a side-effect when cancelled.
+   */
+  protected checkCancelledResult(): Result<void, Error> {
+    if (this.cancelled) {
+      this.setPhase(ScraperPhase.Cancelled);
+      return err(new Error("Scraper cancelled"));
+    }
+    return ok(void 0);
   }
 
   /**
@@ -216,6 +240,12 @@ export abstract class AbstractScraper {
     this._entriesParsed = 0;
     this._entriesWritten = 0;
 
+    // Safety net: wrap the entire lifecycle in try/catch so that any
+    // unexpected throw (e.g. from setPhase/logger/pipeline, a legacy
+    // checkCancelled() call in a subclass, or a sync fs call inside a
+    // lifecycle method) is converted into an err() Result, honoring the
+    // Promise<Result<ScraperResult, Error>> contract.
+    try {
     // Phase 1: Fetch
     if (this.cancelled) {
       this.setPhase(ScraperPhase.Cancelled);
@@ -328,5 +358,21 @@ export abstract class AbstractScraper {
       entriesParsed: this._entriesParsed,
       entriesWritten: this._entriesWritten,
     });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (this.cancelled) {
+        this.setPhase(ScraperPhase.Cancelled);
+        return err(new Error("Scraper cancelled"));
+      }
+
+      this.setPhase(ScraperPhase.Error);
+      this.logger.error(
+        { scraper: this.name, error: errorMessage, phase: this.currentPhase },
+        "Scraper run failed with unhandled exception"
+      );
+
+      return err(error instanceof Error ? error : new Error(errorMessage));
+    }
   }
 }
